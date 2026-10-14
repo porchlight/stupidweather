@@ -59,6 +59,14 @@ export function aggregateWeek(hours, tz) {
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export function radarTimes(now = new Date(), count = 30) {
+  const step = 6 * 60 * 1000;
+  const end = Math.floor(now.getTime() / step) * step;
+  const out = [];
+  for (let i = count - 1; i >= 0; i--) out.push(new Date(end - i * step).toISOString());
+  return out;
+}
+
 export async function pool(items, limit, fn) {
   const out = new Array(items.length);
   let i = 0;

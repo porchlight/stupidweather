@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { tzParts, dateKey, forecastTimes, aggregateToday, aggregateWeek, pool } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateToday, aggregateWeek, pool, radarTimes } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -32,5 +32,9 @@ assert.deepEqual(week[1], { date: '2026-10-15', pop: 30, precip: 4 });
 // pool preserves order
 const out = await pool([1, 2, 3, 4], 2, async n => n * 10);
 assert.deepEqual(out, [10, 20, 30, 40]);
+
+// radarTimes: 6-min steps ending at the floor of now, oldest->newest
+const rt = radarTimes(new Date('2026-10-14T17:59:00Z'), 3);
+assert.deepEqual(rt, ['2026-10-14T17:42:00.000Z', '2026-10-14T17:48:00.000Z', '2026-10-14T17:54:00.000Z']);
 
 console.log('selfcheck OK');

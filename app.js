@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, tzParts, weekdayName } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, tzParts, weekdayName, radarTimes } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -146,4 +146,78 @@ export function renderForecast(hours, loc) {
   document.getElementById('tab-hourly').innerHTML = hourlyTable(hours, loc.tz);
   document.getElementById('tab-today').innerHTML = todayTable(hours, loc.tz) + '<p>POP = period max, precip = period total.</p>';
   document.getElementById('tab-week').innerHTML = weekTable(hours, loc.tz) + '<p>POP = daily max, precip = daily total.</p>';
+}
+
+const RADAR_LAYER = 'RADAR_1KM_RRAI';
+let radarMap = null;
+let radarOverlay = null;
+let radarFrames = [];
+let radarIndex = 0;
+let radarTimer = null;
+
+function radarFrameUrl(time, bounds) {
+  const p = new URLSearchParams({
+    SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap',
+    LAYERS: RADAR_LAYER, CRS: 'EPSG:4326',
+    BBOX: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
+    WIDTH: '1024', HEIGHT: '1024', FORMAT: 'image/png', TRANSPARENT: 'TRUE',
+    TIME: time.replace(/\.\d+Z$/, 'Z'), STYLES: ''
+  });
+  return `${WMS}?${p}`;
+}
+
+export function initRadar(loc) {
+  if (radarMap) return;
+  radarMap = L.map('radarMap').setView([loc.lat, loc.lon], 7);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18, attribution: '&copy; OpenStreetMap'
+  }).addTo(radarMap);
+  radarOverlay = L.imageOverlay('', radarMap.getBounds(), { opacity: 0.8, interactive: false }).addTo(radarMap);
+  L.circleMarker([loc.lat, loc.lon], { radius: 5 }).addTo(radarMap);
+  document.getElementById('playBtn').addEventListener('click', playRadar);
+  document.getElementById('pauseBtn').addEventListener('click', pauseRadar);
+  document.getElementById('speedInput').addEventListener('input', () => { if (radarTimer) { pauseRadar(); playRadar(); } });
+  document.getElementById('frameSlider').addEventListener('input', e => { pauseRadar(); showFrame(Number(e.target.value)); });
+}
+
+export async function refreshRadar(loc) {
+  initRadar(loc);
+  radarMap.setView([loc.lat, loc.lon]);
+  const bounds = radarMap.getBounds();
+  const times = radarTimes(new Date());
+  radarFrames = await pool(times, 6, async (time) => {
+    const url = radarFrameUrl(time, bounds);
+    return { time, url };
+  });
+  await Promise.all(radarFrames.map(f => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = f.url; })));
+  const slider = document.getElementById('frameSlider');
+  slider.max = String(radarFrames.length - 1);
+  slider.value = '0';
+  showFrame(radarFrames.length - 1);
+  playRadar();
+}
+
+function showFrame(i) {
+  radarIndex = Math.max(0, Math.min(i, radarFrames.length - 1));
+  const f = radarFrames[radarIndex];
+  if (!f) return;
+  radarOverlay.setBounds(radarMap.getBounds());
+  radarOverlay.setUrl(f.url);
+  document.getElementById('frameSlider').value = String(radarIndex);
+  const p = tzParts(f.time, currentLocation?.tz || 'UTC');
+  document.getElementById('radarTime').textContent = `${p.hour}:${p.minute}`;
+}
+
+function playRadar() {
+  if (radarTimer || radarFrames.length < 2) return;
+  const speed = Number(document.getElementById('speedInput').value);
+  radarTimer = setInterval(() => {
+    if (radarIndex >= radarFrames.length - 1) radarIndex = -1;
+    showFrame(radarIndex + 1);
+  }, speed);
+}
+
+function pauseRadar() {
+  clearInterval(radarTimer);
+  radarTimer = null;
 }
