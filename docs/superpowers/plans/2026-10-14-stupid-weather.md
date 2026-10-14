@@ -458,7 +458,7 @@ async function pointValue(layer, lat, lon, time) {
     LAYERS: layer, QUERY_LAYERS: layer, CRS: 'EPSG:4326',
     BBOX: `${lat - d},${lon - d},${lat + d},${lon + d}`,
     WIDTH: '101', HEIGHT: '101', I: '50', J: '50',
-    INFO_FORMAT: 'application/json', TIME: time, STYLES: ''
+    INFO_FORMAT: 'application/json', TIME: time.replace(/\.\d+Z$/, 'Z'), STYLES: ''
   });
   const res = await fetch(`${WMS}?${p}`);
   if (!res.ok) throw new Error('WMS ' + res.status);
@@ -604,9 +604,9 @@ export function radarTimes(now = new Date(), count = 30) {
 ```js
 import { radarTimes } from './logic.js';
 const rt = radarTimes(new Date('2026-10-14T17:59:00Z'), 3);
-assert.deepEqual(rt, ['2026-10-14T17:48:00.000Z', '2026-10-14T17:54:00.000Z', '2026-10-14T18:00:00.000Z']);
+assert.deepEqual(rt, ['2026-10-14T17:42:00.000Z', '2026-10-14T17:48:00.000Z', '2026-10-14T17:54:00.000Z']);
 ```
-(Add `radarTimes` to the existing import line instead of a new import if you prefer.)
+(Add `radarTimes` to the existing `./logic.js` import line in `selfcheck.js` — do NOT add a second import.)
 
 - [ ] **Step 3: Run the self-check**
 
@@ -616,7 +616,7 @@ Expected: `selfcheck OK`
 - [ ] **Step 4: Add radar code to `app.js`**
 
 ```js
-import { radarTimes } from './logic.js';
+import { radarTimes } from './logic.js'; // add radarTimes to the EXISTING line-1 import; do NOT add a second import
 
 const RADAR_LAYER = 'RADAR_1KM_RRAI';
 let radarMap = null;
@@ -631,7 +631,7 @@ function radarFrameUrl(time, bounds) {
     LAYERS: RADAR_LAYER, CRS: 'EPSG:4326',
     BBOX: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
     WIDTH: '1024', HEIGHT: '1024', FORMAT: 'image/png', TRANSPARENT: 'TRUE',
-    TIME: time, STYLES: ''
+    TIME: time.replace(/\.\d+Z$/, 'Z'), STYLES: ''
   });
   return `${WMS}?${p}`;
 }
