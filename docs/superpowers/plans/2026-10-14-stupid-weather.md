@@ -236,21 +236,22 @@ assert.equal(times[0], '2026-10-14T17:00:00.000Z');
 assert.equal(times[48], '2026-10-16T17:00:00.000Z');
 assert.ok(times.every(t => t.endsWith(':00:00.000Z')));
 
-// aggregateToday: windows by local hour (Toronto)
+// aggregateToday: windows by local hour (Toronto, EDT = UTC-4 in October)
 const hours = [
-  { time: '2026-10-14T14:00:00Z', pop: 20, precip: 1 }, // 10:00 local -> morning
-  { time: '2026-10-14T18:00:00Z', pop: 60, precip: 2 }, // 14:00 local -> afternoon
-  { time: '2026-10-15T01:00:00Z', pop: 5,  precip: 0 }, // 21:00 local -> night
+  { time: '2026-10-14T14:00:00Z', pop: 20, precip: 1 }, // 10:00 local 10-14 -> morning
+  { time: '2026-10-14T18:00:00Z', pop: 60, precip: 2 }, // 14:00 local 10-14 -> afternoon
+  { time: '2026-10-15T01:00:00Z', pop: 5,  precip: 0 }, // 21:00 local 10-14 -> night
 ];
 const per = aggregateToday(hours, 'America/Toronto');
 assert.deepEqual(per.morning, { pop: 20, precip: 1 });
 assert.deepEqual(per.afternoon, { pop: 60, precip: 2 });
 assert.deepEqual(per.night, { pop: 5, precip: 0 });
 
-// aggregateWeek: group by local date, pop=max, precip=sum
-const week = aggregateWeek(hours, 'America/Toronto');
+// aggregateWeek: group by local date, pop=max, precip=sum (crosses midnight UTC)
+const weekHours = [...hours, { time: '2026-10-15T14:00:00Z', pop: 30, precip: 4 }]; // 10:00 local 10-15
+const week = aggregateWeek(weekHours, 'America/Toronto');
 assert.deepEqual(week[0], { date: '2026-10-14', pop: 60, precip: 3 });
-assert.deepEqual(week[1], { date: '2026-10-15', pop: 5, precip: 0 });
+assert.deepEqual(week[1], { date: '2026-10-15', pop: 30, precip: 4 });
 
 // pool preserves order
 const out = await pool([1, 2, 3, 4], 2, async n => n * 10);
