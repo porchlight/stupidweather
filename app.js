@@ -1,4 +1,4 @@
-import { REFRESH_MS } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -69,4 +69,48 @@ function restoreLocation() {
     document.getElementById('locationName').textContent = currentLocation.name;
     return currentLocation;
   } catch { return null; }
+}
+
+const WMS = 'https://geo.weather.gc.ca/geomet';
+const LAYER_POP = 'GDPS-WEonG_15km_Precip-Prob';
+const LAYER_PCP = 'GDPS_15km_Precip-Accum1h';
+
+async function pointValue(layer, lat, lon, time) {
+  const d = 0.2;
+  const p = new URLSearchParams({
+    SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo',
+    LAYERS: layer, QUERY_LAYERS: layer, CRS: 'EPSG:4326',
+    BBOX: `${lat - d},${lon - d},${lat + d},${lon + d}`,
+    WIDTH: '101', HEIGHT: '101', I: '50', J: '50',
+    INFO_FORMAT: 'application/json', TIME: time.replace(/\.\d+Z$/, 'Z'), STYLES: ''
+  });
+  const res = await fetch(`${WMS}?${p}`);
+  if (!res.ok) throw new Error('WMS ' + res.status);
+  const json = await res.json();
+  const f = json.features && json.features[0];
+  return f && typeof f.properties.value === 'number' ? f.properties.value : null;
+}
+
+export async function fetchForecast(loc) {
+  const times = forecastTimes(new Date());
+  const hours = await pool(times, 6, async (time) => {
+    const [pop, precip] = await Promise.all([
+      pointValue(LAYER_POP, loc.lat, loc.lon, time).catch(() => null),
+      pointValue(LAYER_PCP, loc.lat, loc.lon, time).catch(() => null)
+    ]);
+    return { time, pop: pop ?? 0, precip: precip ?? 0 };
+  });
+  localStorage.setItem('sw:forecast', JSON.stringify(hours));
+  localStorage.setItem('sw:forecastTs', String(Date.now()));
+  return hours;
+}
+
+export function forecastIsStale() {
+  const ts = Number(localStorage.getItem('sw:forecastTs') || 0);
+  return Date.now() - ts > REFRESH_MS;
+}
+
+function loadCachedForecast() {
+  try { return JSON.parse(localStorage.getItem('sw:forecast') || 'null'); }
+  catch { return null; }
 }
