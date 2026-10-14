@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, tzParts, weekdayName } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -113,4 +113,37 @@ export function forecastIsStale() {
 function loadCachedForecast() {
   try { return JSON.parse(localStorage.getItem('sw:forecast') || 'null'); }
   catch { return null; }
+}
+
+function hourlyTable(hours, tz) {
+  const rows = hours.slice(0, 48).map(h => {
+    const p = tzParts(h.time, tz);
+    return `<tr><td>${p.day}/${p.month} ${p.hour}:00</td><td>${Math.round(h.pop)}%</td><td>${h.precip.toFixed(1)}</td></tr>`;
+  }).join('');
+  return `<table><thead><tr><th>Time</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function todayTable(hours, tz) {
+  const per = aggregateToday(hours, tz);
+  const row = (label, v) => `<tr><td>${label}</td><td>${Math.round(v.pop)}%</td><td>${v.precip.toFixed(1)}</td></tr>`;
+  return `<table><thead><tr><th>Period</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>`
+    + row('Morning (6–12)', per.morning)
+    + row('Afternoon (12–18)', per.afternoon)
+    + row('Night (18–6)', per.night)
+    + `</tbody></table>`;
+}
+
+function weekTable(hours, tz) {
+  const days = aggregateWeek(hours, tz);
+  const rows = days.map(d => {
+    const iso = d.date + 'T12:00:00Z';
+    return `<tr><td>${d.date} ${weekdayName(iso, tz)}</td><td>${Math.round(d.pop)}%</td><td>${d.precip.toFixed(1)}</td></tr>`;
+  }).join('');
+  return `<table><thead><tr><th>Day</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+export function renderForecast(hours, loc) {
+  document.getElementById('tab-hourly').innerHTML = hourlyTable(hours, loc.tz);
+  document.getElementById('tab-today').innerHTML = todayTable(hours, loc.tz) + '<p>POP = period max, precip = period total.</p>';
+  document.getElementById('tab-week').innerHTML = weekTable(hours, loc.tz) + '<p>POP = daily max, precip = daily total.</p>';
 }
