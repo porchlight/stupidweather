@@ -1,0 +1,12 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; }
+header, nav, main { padding: .75rem; }
+nav { display: flex; gap: .5rem; flex-wrap: wrap; }
+nav button.active { font-weight: 700; text-decoration: underline; }
+.tab[hidden] { display: none; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: .4rem .5rem; border: 1px solid #ddd; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+#radarMap { width: 100%; height: 65vh; background: #e8e8e8; }
+#radarControls { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: .5rem; }
+#status { color: #a00; font-size: .9rem; }

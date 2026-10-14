@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stupid Weather</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Stupid Weather</h1>
+    <form id="locationForm">
+      <input id="locationInput" placeholder="City, Province (e.g. Toronto, Ontario)" required>
+      <button type="submit">Search</button>
+    </form>
+    <div id="locationName"></div>
+    <div id="lastUpdate"></div>
+    <div id="status" role="status"></div>
+  </header>
+  <nav>
+    <button data-tab="hourly">Hourly</button>
+    <button data-tab="today">Today</button>
+    <button data-tab="week">7-Day</button>
+    <button data-tab="radar">Radar</button>
+  </nav>
+  <main>
+    <section id="tab-hourly" class="tab"></section>
+    <section id="tab-today" class="tab" hidden></section>
+    <section id="tab-week" class="tab" hidden></section>
+    <section id="tab-radar" class="tab" hidden>
+      <div id="radarControls">
+        <button id="playBtn">Play</button>
+        <button id="pauseBtn">Pause</button>
+        <label>Speed <input id="speedInput" type="range" min="200" max="1200" step="100" value="500"></label>
+        <input id="frameSlider" type="range" min="0" max="0" value="0">
+        <span id="radarTime"></span>
+      </div>
+      <div id="radarMap"></div>
+    </section>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

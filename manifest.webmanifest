@@ -1,0 +1,9 @@
+{
+  "name": "Stupid Weather",
+  "short_name": "StupidWx",
+  "start_url": "./",
+  "display": "standalone",
+  "theme_color": "#222222",
+  "background_color": "#ffffff",
+  "icons": []
+}
