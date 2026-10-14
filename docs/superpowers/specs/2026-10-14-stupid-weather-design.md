@@ -1,7 +1,7 @@
 # Stupid Weather - Design Document
 
 Date: 2026-10-14
-Status: Draft (awaiting user review)
+Status: Approved (endpoints verified)
 Scope: Single PWA (static files only)
 
 ## Goals
@@ -14,20 +14,31 @@ Build a minimal PWA "Stupid Weather" with:
 - Radar: animated loop with controls (play/pause/speed/frame)
 - Deployable as static files (no backend required if possible)
 
-## Data Source: Environment Canada GeoMet OGC API
-Environment Canada GeoMet (https://geomet-dev.ec.gc.ca/ or production endpoints) provides OGC services (WMS/WMTS/WFS). 
-- Forecast data (hourly): need point-based forecast for POP and precipitation amounts. Use OGC point query (WFS/GetFeatureInfo) where available; fallback to gridded data if needed.
-- Radar: precipitation radar composites via WMS; retrieve time series of frames for animation.
-- Timezone: API typically returns UTC; convert to selected location TZ.
-- CORS: public endpoints may allow direct browser calls. If CORS blocks, document lightweight proxy option (out of scope for static-only). Start with direct fetch.
+## Data Source: Environment Canada GeoMet (verified)
+Two services, both CORS-open (`Access-Control-Allow-Origin: *`):
+- OGC API: `https://api.weather.gc.ca` (collections, features)
+- WMS: `https://geo.weather.gc.ca/geomet` (gridded model + radar imagery)
+
+Verified data paths:
+- **POP% per hour**: WMS `GetFeatureInfo` on `GDPS-WEonG_15km_Precip-Prob` (value = percent). 15 km, hourly to ~72 h then 3-hourly to ~10 days.
+- **Precip per hour (mm)**: WMS `GetFeatureInfo` on `GDPS_15km_Precip-Accum1h` (value = mm for that hour). Same time grid.
+  - `GetFeatureInfo` is one layer per request (multiple layers unsupported), so 2 requests per timestamp. EPSG:4326 BBOX order is lat,lon (WMS 1.3.0). INFO_FORMAT=application/json.
+  - The OGC API city forecast (`citypageweather-realtime`) has hourly POP (`lop`) but **no numeric precip amount**, so gridded WMS is required for mm.
+- **Radar**: WMS `RADAR_1KM_RRAI` (rain); transparent PNG frames, last ~3 h at 6-minute steps (~30 frames). `RADAR_1KM_RSNO` for snow if wanted later.
+- **Geocoding**: Nominatim `https://nominatim.openstreetmap.org/search` (city, province) → lat/lon.
+- **Timezone**: `https://timeapi.io/api/TimeZone/coordinate?latitude=..&longitude=..` → IANA tz (e.g. America/Toronto).
+- **Basemap**: none in GeoMet. Leaflet + OpenStreetMap raster tiles.
+- **Times**: all API times are UTC; convert for display using the location's IANA tz.
+
+Request-count note: model point data is one `GetFeatureInfo` per layer per timestamp (~2× timestamps per refresh). Cached for the 12-minute window.
 
 ## Architecture
 - Static files only: `index.html`, `styles.css`, `app.js`, `sw.js`, `manifest.webmanifest`
 - Location search: geocode city/province → lat/lon. Nominatim (OpenStreetMap) is simple HTTP (no key) and CORS-friendly; acceptable for this scope.
 - Data layer:
   - Geocoding: Nominatim `search` (by city, province)
-  - Forecast: GeoMet OGC API point query to get hourly POP (%) and precip (mm) for next ~48h
-  - Radar: GeoMet WMS time-enabled layer; collect frames for recent period
+  - Forecast: GeoMet WMS `GetFeatureInfo` (GDPS layers) for hourly POP (%) and precip (mm)
+  - Radar: GeoMet WMS `RADAR_1KM_RRAI` time-enabled frames + Leaflet/OSM basemap
 - State: in-memory + `localStorage` (persist last location, last data with timestamps). Auto-refresh every 12 min based on timestamp.
 - PWA: web app manifest + service worker caching app shell. Data is stale-ok if offline.
 
@@ -50,7 +61,7 @@ Aggregation:
 Daily aggregates: POP% max, precip total per day.
 
 ### Radar
-Map container. Fetch radar frames from GeoMet WMS (time series). Animated loop with controls: play/pause, speed, frame slider, last update time. Auto-refresh every 12 min also refreshes frame set.
+Leaflet map (OSM tiles) with a location marker. Radar frames from GeoMet WMS `RADAR_1KM_RRAI` as transparent image overlays over the map. Animated loop with controls: play/pause, speed, frame slider, last update time. Auto-refresh every 12 min also refreshes the frame set.
 
 ## Data Model (minimal)
 ```json
@@ -65,16 +76,16 @@ Map container. Fetch radar frames from GeoMet WMS (time series). Animated loop w
 ## Non-Functional
 - Offline shell (basic UI loads). Data stale-ok offline.
 - Mobile-first, minimal CSS.
-- No external frameworks/libraries.
+- No build step. One external library: Leaflet (single CDN CSS+JS) for the radar map only.
 
 ## Risks
 - EC GeoMet endpoint/parameter changes; need defensive parsing.
-- CORS: may block direct calls; if so, proxy needed (out of scope). Try direct first.
+- Radar/model timesteps move with the latest model run; handle "time outside valid hours" by skipping.
 - Radar frame availability varies by region/time.
-- TZ conversion edge cases (DST).
+- TZ conversion edge cases (DST) handled via IANA tz lookup.
 
 ## Implementation Approach (recommended)
-Vanilla HTML/CSS/JS (no build) — shortest path, matches “stupid”, fits ponytail ladder.
+Vanilla HTML/CSS/JS (no build), plus Leaflet (CDN) for the radar map — shortest path that works, fits ponytail ladder.
 
 ## Testing
 Trivial runtime checks: parse sanity, TZ conversion, aggregation sums. No test framework unless strictly needed.
