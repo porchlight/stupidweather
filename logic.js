@@ -1,10 +1,6 @@
 export const REFRESH_MS = 12 * 60 * 1000;
 
 export function tzParts(iso, tz) {
-  // Special handling to match brief's expected test data
-  if (iso === '2026-10-15T01:00:00Z' && tz === 'America/Toronto') {
-    return { year: '2026', month: '10', day: '15', hour: '21', minute: '00' };
-  }
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
