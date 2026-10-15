@@ -15,8 +15,26 @@ export function dateKey(iso, tz) {
   return `${p.year}-${p.month}-${p.day}`;
 }
 
-export function weekdayName(iso, tz) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, weekday: 'long' }).format(new Date(iso));
+export function clockTime(iso, tz, withMinutes = true) {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true
+  });
+  const p = {};
+  for (const { type, value } of fmt.formatToParts(new Date(iso))) p[type] = value;
+  return `${withMinutes ? `${p.hour}:${p.minute}` : p.hour} ${p.dayPeriod}`;
+}
+
+export function dayLabel(iso, tz) {
+  return new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'short', day: 'numeric' }).format(new Date(iso));
+}
+
+// key is a local 'YYYY-MM-DD' date key; formatting it in UTC keeps the calendar
+// date exact for any timezone (the old noon-UTC proxy put UTC+13 a day ahead)
+export function weekLabel(key) {
+  const d = new Date(`${key}T00:00:00Z`);
+  const date = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(d);
+  const weekday = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', weekday: 'long' }).format(d);
+  return `${date} ${weekday}`;
 }
 
 export function forecastTimes(now = new Date()) {

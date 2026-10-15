@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, tzParts, weekdayName, radarTimes, dateKey } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, dateKey, radarTimes, clockTime, dayLabel, weekLabel } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -38,8 +38,7 @@ export async function refreshAll(loc) {
     }
     renderForecast(hours, loc);
     await refreshRadar(loc);
-    const p = tzParts(new Date().toISOString(), loc.tz);
-    document.getElementById('lastUpdate').textContent = `Updated ${p.hour}:${p.minute} local${offline ? ' (offline)' : ''}`;
+    document.getElementById('lastUpdate').textContent = `Updated ${clockTime(new Date().toISOString(), loc.tz)} local${offline ? ' (offline)' : ''}`;
   } catch (err) {
     status.textContent = 'Update failed: ' + err.message;
     console.error(err);
@@ -157,8 +156,7 @@ function loadCachedForecast() {
 
 function hourlyTable(hours, tz) {
   const rows = hours.slice(0, 48).map(h => {
-    const p = tzParts(h.time, tz);
-    return `<tr><td>${p.day}/${p.month} ${p.hour}:00</td><td>${Math.round(h.pop)}%</td><td>${h.precip.toFixed(1)}</td></tr>`;
+    return `<tr><td>${dayLabel(h.time, tz)}, ${clockTime(h.time, tz, false)}</td><td>${Math.round(h.pop)}%</td><td>${h.precip.toFixed(1)}</td></tr>`;
   }).join('');
   return `<table><thead><tr><th>Time</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -169,17 +167,16 @@ function todayTable(hours, tz) {
   const per = aggregateToday(todays, tz);
   const row = (label, v) => `<tr><td>${label}</td><td>${Math.round(v.pop)}%</td><td>${v.precip.toFixed(1)}</td></tr>`;
   return `<table><thead><tr><th>Period</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>`
-    + row('Morning (6–12)', per.morning)
-    + row('Afternoon (12–18)', per.afternoon)
-    + row('Night (18–6)', per.night)
+    + row('Morning', per.morning)
+    + row('Afternoon', per.afternoon)
+    + row('Night', per.night)
     + `</tbody></table>`;
 }
 
 function weekTable(hours, tz) {
   const days = aggregateWeek(hours, tz);
   const rows = days.map(d => {
-    const iso = d.date + 'T12:00:00Z';
-    return `<tr><td>${d.date} ${weekdayName(iso, tz)}</td><td>${Math.round(d.pop)}%</td><td>${d.precip.toFixed(1)}</td></tr>`;
+    return `<tr><td>${weekLabel(d.date)}</td><td>${Math.round(d.pop)}%</td><td>${d.precip.toFixed(1)}</td></tr>`;
   }).join('');
   return `<table><thead><tr><th>Day</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -250,8 +247,7 @@ function showFrame(i) {
   radarOverlay.setBounds(radarBounds || radarMap.getBounds());
   radarOverlay.setUrl(f.url);
   document.getElementById('frameSlider').value = String(radarIndex);
-  const p = tzParts(f.time, currentLocation?.tz || 'UTC');
-  document.getElementById('radarTime').textContent = `${p.hour}:${p.minute}`;
+  document.getElementById('radarTime').textContent = clockTime(f.time, currentLocation?.tz || 'UTC');
 }
 
 function playRadar() {

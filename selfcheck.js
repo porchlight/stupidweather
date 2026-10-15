@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { tzParts, dateKey, forecastTimes, aggregateToday, aggregateWeek, pool, radarTimes } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateToday, aggregateWeek, pool, radarTimes, clockTime, dayLabel, weekLabel } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -36,5 +36,18 @@ assert.deepEqual(out, [10, 20, 30, 40]);
 // radarTimes: 6-min steps ending at the floor of now, oldest->newest
 const rt = radarTimes(new Date('2026-10-14T17:59:00Z'), 3);
 assert.deepEqual(rt, ['2026-10-14T17:42:00.000Z', '2026-10-14T17:48:00.000Z', '2026-10-14T17:54:00.000Z']);
+
+// clockTime: 12-hour labels in the location tz (Toronto = UTC-4 in October)
+assert.equal(clockTime('2026-10-15T14:32:00Z', 'America/Toronto', true), '10:32 AM');
+assert.equal(clockTime('2026-10-15T14:00:00Z', 'America/Toronto', false), '10 AM');
+assert.equal(clockTime('2026-10-15T02:00:00Z', 'America/Toronto', false), '10 PM');
+
+// dayLabel: month-name dates, taken from the location date not UTC
+assert.equal(dayLabel('2026-10-15T14:32:00Z', 'America/Toronto'), 'Oct 15');
+assert.equal(dayLabel('2026-10-15T02:00:00Z', 'America/Toronto'), 'Oct 14');
+
+// weekLabel: takes an already-local date key, so it is timezone-independent
+assert.equal(weekLabel('2026-10-15'), 'Oct 15 Thursday');
+assert.equal(weekLabel('2026-10-19'), 'Oct 19 Monday');
 
 console.log('selfcheck OK');
