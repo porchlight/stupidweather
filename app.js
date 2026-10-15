@@ -15,8 +15,10 @@ let currentLocation = null;
 let refreshTimer = null;
 
 let onLocationChange = async (loc) => {
-  await refreshAll(loc);
   clearInterval(refreshTimer);
+  refreshTimer = null;
+  await refreshAll(loc);
+  if (currentLocation !== loc) return;
   refreshTimer = setInterval(() => refreshAll(loc), REFRESH_MS);
 };
 
@@ -24,8 +26,9 @@ export async function refreshAll(loc) {
   const status = document.getElementById('status');
   status.textContent = '';
   try {
+    const key = loc.lat + ',' + loc.lon;
     let hours = loadCachedForecast();
-    if (!hours || forecastIsStale()) hours = await fetchForecast(loc);
+    if (!hours || forecastIsStale() || localStorage.getItem('sw:forecastKey') !== key) hours = await fetchForecast(loc);
     renderForecast(hours, loc);
     await refreshRadar(loc);
     const p = tzParts(new Date().toISOString(), loc.tz);
@@ -125,6 +128,7 @@ export async function fetchForecast(loc) {
   });
   localStorage.setItem('sw:forecast', JSON.stringify(hours));
   localStorage.setItem('sw:forecastTs', String(Date.now()));
+  localStorage.setItem('sw:forecastKey', loc.lat + ',' + loc.lon);
   return hours;
 }
 
