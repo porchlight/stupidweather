@@ -33,13 +33,9 @@ export async function refreshAll(loc) {
     const key = loc.lat + ',' + loc.lon;
     let hours = loadCachedForecast();
     let offline = false;
-    let lastPaint = 0;
-    const paint = (hrs, hourlyOnly) => {
+    const paint = (hrs) => {
       if (seq !== refreshSeq) return;
-      const now = Date.now();
-      if (hourlyOnly && now - lastPaint < 500) return;
-      lastPaint = now;
-      renderForecast(hrs, loc, { hourlyOnly });
+      renderForecast(hrs, loc, { hourlyOnly: true });
     };
     try {
       if (!hours || forecastIsStale() || localStorage.getItem('sw:forecastKey') !== key) hours = await fetchForecast(loc, paint);
@@ -155,7 +151,7 @@ const LAYER_WIND = 'GDPS_15km_WindSpeed_10m';
 const LAYER_GUST = 'GDPS_15km_WindGust_10m';
 const LAYER_CLOUD = 'GDPS_15km_TotalCloudCover';
 const LAYER_TSTORM = 'GDPS-WEonG_15km_Thunderstorm-Prob';
-const FORECAST_VER = '2';
+const FORECAST_VER = '3';
 
 async function pointValue(layer, lat, lon, time) {
   const d = 0.2;
@@ -175,39 +171,25 @@ async function pointValue(layer, lat, lon, time) {
 
 export async function fetchForecast(loc, onProgress) {
   const times = forecastTimes(new Date());
-
-  const base = await pool(times, 6, async time => {
-    const [pop, precip] = await Promise.all([
-      pointValue(LAYER_POP, loc.lat, loc.lon, time).catch(() => null),
-      pointValue(LAYER_PCP, loc.lat, loc.lon, time).catch(() => null)
-    ]);
-    return { time, pop, precip };
+  const hours = new Array(times.length);
+  let anyData = false;
+  await pool(times, 5, async (time, i) => {
+    const [pop, precip, temp, wind, gust, cloud, tstorm] = await Promise.all([
+      pointValue(LAYER_POP, loc.lat, loc.lon, time),
+      pointValue(LAYER_PCP, loc.lat, loc.lon, time),
+      pointValue(LAYER_TEMP, loc.lat, loc.lon, time),
+      pointValue(LAYER_WIND, loc.lat, loc.lon, time),
+      pointValue(LAYER_GUST, loc.lat, loc.lon, time),
+      pointValue(LAYER_CLOUD, loc.lat, loc.lon, time),
+      pointValue(LAYER_TSTORM, loc.lat, loc.lon, time)
+    ].map(p => p.catch(() => null)));
+    if (pop != null || precip != null || temp != null || wind != null
+        || gust != null || cloud != null || tstorm != null) anyData = true;
+    hours[i] = { time, pop: pop ?? 0, precip: precip ?? 0, temp, wind, gust, cloud, tstorm };
+    if (onProgress) onProgress(hours.filter(Boolean));
   });
-  if (base.every(h => h.pop === null && h.precip === null)) {
-    throw new Error('Forecast data unavailable');
-  }
-
-  const hours = base.map(h => ({
-    time: h.time, pop: h.pop ?? 0, precip: h.precip ?? 0,
-    temp: null, wind: null, gust: null, cloud: null, tstorm: null
-  }));
+  if (!anyData) throw new Error('Forecast data unavailable');
   writeForecast(hours, loc);
-  if (onProgress) onProgress(hours, false);
-
-  await pool(times, 6, async (time, i) => {
-    const [temp, wind, gust, cloud, tstorm] = await Promise.all([
-      pointValue(LAYER_TEMP, loc.lat, loc.lon, time).catch(() => null),
-      pointValue(LAYER_WIND, loc.lat, loc.lon, time).catch(() => null),
-      pointValue(LAYER_GUST, loc.lat, loc.lon, time).catch(() => null),
-      pointValue(LAYER_CLOUD, loc.lat, loc.lon, time).catch(() => null),
-      pointValue(LAYER_TSTORM, loc.lat, loc.lon, time).catch(() => null)
-    ]);
-    Object.assign(hours[i], { temp, wind, gust, cloud, tstorm });
-    if (onProgress) onProgress(hours, true);
-  });
-
-  writeForecast(hours, loc);
-  if (onProgress) onProgress(hours, false);
   return hours;
 }
 
@@ -230,7 +212,7 @@ function loadCachedForecast() {
 }
 
 function hourlyTable(hours, tz) {
-  const rows = hours.slice(0, 48).map(h => {
+  const rows = hours.slice(0, 12).map(h => {
     return `<tr><td>${dayLabel(h.time, tz)}, ${clockTime(h.time, tz, false)}</td>`
       + `<td>${Math.round(h.pop)}%</td><td>${h.precip.toFixed(1)}</td>`
       + `<td>${fmtTemp(h.temp)}</td><td>${conditionWord(h.cloud, h.tstorm)}</td>`
