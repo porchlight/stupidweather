@@ -3,7 +3,9 @@
   "short_name": "StupidWx",
   "start_url": "./",
   "display": "standalone",
-  "theme_color": "#222222",
-  "background_color": "#ffffff",
-  "icons": []
+  "theme_color": "#6a4c93",
+  "background_color": "#fbfbfe",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
 }

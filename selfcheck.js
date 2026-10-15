@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { tzParts, dateKey, forecastTimes, aggregateWeek, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
@@ -87,5 +88,19 @@ assert.equal(dayLabel('2026-10-15T02:00:00Z', 'America/Toronto'), 'Oct 14');
 // weekLabel: takes an already-local date key, so it is timezone-independent
 assert.equal(weekLabel('2026-10-15'), 'Oct 15 Thursday');
 assert.equal(weekLabel('2026-10-19'), 'Oct 19 Monday');
+
+// index.html and manifest carry the metadata that matters for sharing/install
+const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+const manifest = JSON.parse(readFileSync(new URL('./manifest.webmanifest', import.meta.url), 'utf8'));
+assert.match(html, /<title>Stupid Weather<\/title>/);
+assert.match(html, /<meta name="description" content="[^"]+"/);
+assert.match(html, /<meta property="og:title"/);
+assert.match(html, /<meta property="og:description"/);
+assert.match(html, /<meta property="og:type" content="website">/);
+assert.match(html, /<meta property="og:image"/);
+assert.match(html, /<meta name="twitter:card" content="summary">/);
+assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="icon\.svg">/);
+assert.equal(manifest.theme_color, '#6a4c93');
+assert.ok(manifest.icons.length > 0);
 
 console.log('selfcheck OK');

@@ -4,12 +4,33 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stupid Weather</title>
+  <meta name="description" content="Stupid Weather shows hourly and 7-day forecasts plus live radar for any city, with no accounts and no nonsense.">
+  <meta name="theme-color" content="#6a4c93">
+  <meta property="og:title" content="Stupid Weather">
+  <meta property="og:description" content="Hourly and 7-day forecasts plus live radar for any city.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Stupid Weather">
+  <meta property="og:locale" content="en_US">
+  <!-- ponytail: make og:image absolute when the site has a URL -->
+  <meta property="og:image" content="icon.svg">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Stupid Weather",
+      "description": "Hourly and 7-day forecasts plus live radar for any city.",
+      "icon": "icon.svg",
+      "applicationCategory": "UtilitiesApplication"
+    }
+  </script>
 </head>
 <body>
   <header>
