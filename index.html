@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Stupid Weather</title>
-  <meta name="description" content="Stupid Weather shows hourly and 7-day forecasts plus live radar for any city, with no accounts and no nonsense.">
+  <meta name="description"
+    content="Stupid Weather shows hourly and 7-day forecasts plus live radar for any city, with no accounts and no nonsense.">
   <meta name="theme-color" content="#6a4c93">
   <meta property="og:title" content="Stupid Weather">
   <meta property="og:description" content="Hourly and 7-day forecasts plus live radar for any city.">
@@ -19,7 +21,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@400;700;800&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script type="application/ld+json">
     {
@@ -32,12 +35,13 @@
     }
   </script>
 </head>
+
 <body>
   <header>
     <h1>Stupid Weather</h1>
     <form id="locationForm">
       <label for="locationInput">City</label>
-      <input id="locationInput" placeholder="e.g. Toronto, Ontario" required>
+      <input id="locationInput" placeholder="e.g. London, Ontario" required>
       <button type="submit">Search</button>
     </form>
     <div id="results" hidden></div>
@@ -67,4 +71,5 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module" src="app.js"></script>
 </body>
+
 </html>
