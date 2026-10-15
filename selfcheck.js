@@ -29,6 +29,17 @@ const week = aggregateWeek(weekHours, 'America/Toronto');
 assert.deepEqual(week[0], { date: '2026-10-14', pop: 60, precip: 3, hi: 18.2, lo: 6.1, wind: 5, gust: 11, cond: 'Cloudy' });
 assert.deepEqual(week[1], { date: '2026-10-15', pop: 30, precip: 4, hi: 15, lo: 15, wind: 8, gust: null, cond: 'Thunderstorm' });
 
+// winter: sub-zero hours aggregate to snow; January dates/labels hold
+const winter = aggregateWeek([
+  { time: '2026-01-15T18:00:00Z', pop: 80, precip: 1.5, temp: -8, wind: 12, gust: 20, cloud: 100, tstorm: 0 }, // 13:00 EST
+  { time: '2026-01-15T23:00:00Z', pop: 90, precip: 0.5, temp: -14, wind: 3, gust: 6, cloud: 100, tstorm: 0 }   // 18:00 EST
+], 'America/Toronto');
+assert.equal(winter[0].cond, 'Blizzard');
+assert.equal(winter[0].hi, -8);
+assert.equal(winter[0].lo, -14);
+assert.equal(dateKey('2026-01-15T23:00:00Z', 'America/Toronto'), '2026-01-15');
+assert.equal(weekLabel('2026-01-15'), 'Jan 15 Thursday');
+
 // conditionWord: thresholds at their boundaries, thunderstorm wins
 assert.equal(conditionWord(92, 0), 'Cloudy');
 assert.equal(conditionWord(70, 0), 'Cloudy');
@@ -40,22 +51,40 @@ assert.equal(conditionWord(50, 29), 'Partly cloudy');
 assert.equal(conditionWord(null, 40), 'Thunderstorm');
 assert.equal(conditionWord(null, null), '–');
 
+// conditionWord: sub-zero precip is snow; heavy rate + strong wind makes a blizzard
+assert.equal(conditionWord(10, 0, -5, 0.5, 3), 'Flurries');
+assert.equal(conditionWord(10, 0, 0, 0.5, 0), 'Flurries');
+assert.equal(conditionWord(10, 0, -5, 1.5, 12), 'Blizzard');
+assert.equal(conditionWord(10, 0, -5, 1, 11), 'Blizzard');
+assert.equal(conditionWord(10, 0, -5, 1.5, 5), 'Flurries');
+assert.equal(conditionWord(10, 0, -5, 0.9, 12), 'Flurries');
+assert.equal(conditionWord(10, 40, -5, 0.5, 3), 'Flurries');
+assert.equal(conditionWord(10, 40, -5, 1.5, 12), 'Blizzard');
+assert.equal(conditionWord(10, 0, -5, 0, 12), 'Sunny');
+assert.equal(conditionWord(10, 0, 5, 1.5, 12), 'Sunny');
+
 // conditionEmoji: one emoji per condition, empty string when unknown
 assert.equal(conditionEmoji('Sunny'), '☀️');
 assert.equal(conditionEmoji('Partly cloudy'), '⛅');
 assert.equal(conditionEmoji('Cloudy'), '☁️');
 assert.equal(conditionEmoji('Thunderstorm'), '⛈️');
+assert.equal(conditionEmoji('Flurries'), '🌨️');
+assert.equal(conditionEmoji('Blizzard'), '❄️');
 assert.equal(conditionEmoji('–'), '');
 assert.equal(conditionEmoji(undefined), '');
 
 // unit and label helpers: null renders as an en dash, 0 is a real value
 assert.equal(fmtTemp(12.6), '13°');
+assert.equal(fmtTemp(-5), '-5°');
+assert.equal(fmtTemp(-12.6), '-13°');
+assert.equal(fmtTemp(-0.4), '0°');
 assert.equal(fmtTemp(null), '–');
 assert.equal(fmtTemp(undefined), '–');
 assert.equal(fmtKmh(3.7509854), '14');
 assert.equal(fmtKmh(0), '0');
 assert.equal(fmtKmh(null), '–');
 assert.equal(fmtHiLo(14.2, 6.1), '14°/6°');
+assert.equal(fmtHiLo(-3.4, -11.6), '-3°/-12°');
 assert.equal(fmtHiLo(null, 6.1), '–');
 assert.equal(fmtHiLo(14.2, null), '–');
 

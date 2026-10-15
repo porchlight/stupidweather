@@ -220,7 +220,7 @@ function loadCachedForecast() {
 
 function hourlyCards(hours, tz) {
   const cards = hours.slice(0, 12).map(h => {
-    const cond = conditionWord(h.cloud, h.tstorm);
+    const cond = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
     return `<article class="card">`
       + `<h3 class="card-time">${dayLabel(h.time, tz)}, ${clockTime(h.time, tz, false)}</h3>`
       + `<div class="card-emoji">${conditionEmoji(cond)}</div>`

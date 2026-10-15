@@ -48,9 +48,17 @@ export function forecastTimes(now = new Date()) {
   return out;
 }
 
-const SEVERITY = ['Sunny', 'Partly cloudy', 'Cloudy', 'Thunderstorm'];
+const SEVERITY = ['Sunny', 'Partly cloudy', 'Cloudy', 'Flurries', 'Thunderstorm', 'Blizzard'];
 
-export function conditionWord(cloud, tstorm) {
+const SNOW_TEMP = 0;        // °C at/below which precipitation falls as snow
+const BLIZZARD_PRECIP = 1;  // mm/h water equivalent
+const BLIZZARD_WIND = 11;   // m/s ≈ 40 km/h
+
+export function conditionWord(cloud, tstorm, temp, precip, wind) {
+  if (temp != null && temp <= SNOW_TEMP && precip > 0) {
+    if (precip >= BLIZZARD_PRECIP && wind != null && wind >= BLIZZARD_WIND) return 'Blizzard';
+    return 'Flurries';
+  }
   if (tstorm != null && tstorm >= 30) return 'Thunderstorm';
   if (cloud == null) return '–';
   if (cloud < 25) return 'Sunny';
@@ -62,7 +70,9 @@ const CONDITION_EMOJI = {
   'Sunny': '☀️',
   'Partly cloudy': '⛅',
   'Cloudy': '☁️',
-  'Thunderstorm': '⛈️'
+  'Thunderstorm': '⛈️',
+  'Flurries': '🌨️',
+  'Blizzard': '❄️'
 };
 
 export function conditionEmoji(cond) {
@@ -97,7 +107,7 @@ function addHour(stat, h) {
   }
   if (h.wind != null) stat.wind = stat.wind == null ? h.wind : Math.max(stat.wind, h.wind);
   if (h.gust != null) stat.gust = stat.gust == null ? h.gust : Math.max(stat.gust, h.gust);
-  const c = conditionWord(h.cloud, h.tstorm);
+  const c = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
   if (c !== '–') stat.cond = worse(stat.cond, c);
 }
 
