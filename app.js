@@ -24,15 +24,22 @@ let onLocationChange = async (loc) => {
 
 export async function refreshAll(loc) {
   const status = document.getElementById('status');
+  if (!loc) { status.textContent = 'Search a city to begin.'; return; }
   status.textContent = '';
   try {
     const key = loc.lat + ',' + loc.lon;
     let hours = loadCachedForecast();
-    if (!hours || forecastIsStale() || localStorage.getItem('sw:forecastKey') !== key) hours = await fetchForecast(loc);
+    let offline = false;
+    try {
+      if (!hours || forecastIsStale() || localStorage.getItem('sw:forecastKey') !== key) hours = await fetchForecast(loc);
+    } catch (e) {
+      if (!hours) throw e;
+      offline = true;
+    }
     renderForecast(hours, loc);
     await refreshRadar(loc);
     const p = tzParts(new Date().toISOString(), loc.tz);
-    document.getElementById('lastUpdate').textContent = `Updated ${p.hour}:${p.minute} local`;
+    document.getElementById('lastUpdate').textContent = `Updated ${p.hour}:${p.minute} local${offline ? ' (offline)' : ''}`;
   } catch (err) {
     status.textContent = 'Update failed: ' + err.message;
     console.error(err);
@@ -50,6 +57,7 @@ function init() {
   });
   const restored = restoreLocation();
   if (restored) onLocationChange(restored);
+  else document.getElementById('status').textContent = 'Search a city to begin.';
   switchTab('hourly');
 }
 init();
