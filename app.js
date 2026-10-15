@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, dateKey, radarTimes, clockTime, dayLabel, weekLabel, conditionWord, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, radarTimes, clockTime, dayLabel, weekLabel, conditionWord, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -221,20 +221,6 @@ function hourlyTable(hours, tz) {
   return `<table><thead><tr><th>Time</th><th>POP</th><th>Precip (mm)</th><th>Temp</th><th>Condition</th><th>Wind (km/h)</th><th>Gust (km/h)</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function todayTable(hours, tz) {
-  const today = dateKey(new Date().toISOString(), tz);
-  const todays = hours.filter(h => dateKey(h.time, tz) === today);
-  const per = aggregateToday(todays, tz);
-  const row = (label, v) => `<tr><td>${label}</td><td>${Math.round(v.pop)}%</td><td>${v.precip.toFixed(1)}</td>`
-    + `<td>${fmtHiLo(v.hi, v.lo)}</td><td>${v.cond ?? '–'}</td>`
-    + `<td>${fmtKmh(v.wind)}</td><td>${fmtKmh(v.gust)}</td></tr>`;
-  return `<table><thead><tr><th>Period</th><th>POP</th><th>Precip (mm)</th><th>Temp</th><th>Condition</th><th>Wind (km/h)</th><th>Gust (km/h)</th></tr></thead><tbody>`
-    + row('Morning', per.morning)
-    + row('Afternoon', per.afternoon)
-    + row('Night', per.night)
-    + `</tbody></table>`;
-}
-
 function weekTable(hours, tz) {
   const days = aggregateWeek(hours, tz);
   const rows = days.map(d => {
@@ -248,7 +234,6 @@ function weekTable(hours, tz) {
 export function renderForecast(hours, loc, opts = {}) {
   document.getElementById('tab-hourly').innerHTML = hourlyTable(hours, loc.tz);
   if (opts.hourlyOnly) return;
-  document.getElementById('tab-today').innerHTML = todayTable(hours, loc.tz) + '<p>POP = period max, precip = period total.</p>';
   document.getElementById('tab-week').innerHTML = weekTable(hours, loc.tz) + '<p>POP = daily max, precip = daily total.</p>';
 }
 

@@ -48,8 +48,6 @@ export function forecastTimes(now = new Date()) {
   return out;
 }
 
-function hourOf(iso, tz) { return Number(tzParts(iso, tz).hour); }
-
 const SEVERITY = ['Sunny', 'Partly cloudy', 'Cloudy', 'Thunderstorm'];
 
 export function conditionWord(cloud, tstorm) {
@@ -90,18 +88,6 @@ function addHour(stat, h) {
   if (h.gust != null) stat.gust = stat.gust == null ? h.gust : Math.max(stat.gust, h.gust);
   const c = conditionWord(h.cloud, h.tstorm);
   if (c !== '–') stat.cond = worse(stat.cond, c);
-}
-
-export function aggregateToday(hours, tz) {
-  const buckets = { morning: [], afternoon: [], night: [] };
-  for (const h of hours) {
-    const hr = hourOf(h.time, tz);
-    if (hr >= 6 && hr < 12) buckets.morning.push(h);
-    else if (hr >= 12 && hr < 18) buckets.afternoon.push(h);
-    else buckets.night.push(h);
-  }
-  const agg = list => { const s = emptyStat(); for (const h of list) addHour(s, h); return s; };
-  return { morning: agg(buckets.morning), afternoon: agg(buckets.afternoon), night: agg(buckets.night) };
 }
 
 export function aggregateWeek(hours, tz) {

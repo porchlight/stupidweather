@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { tzParts, dateKey, forecastTimes, aggregateToday, aggregateWeek, pool, radarTimes, clockTime, dayLabel, weekLabel, conditionWord, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, pool, radarTimes, clockTime, dayLabel, weekLabel, conditionWord, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -15,20 +15,12 @@ assert.equal(times[12], '2026-10-15T06:00:00.000Z');
 assert.equal(times[times.length - 1], '2026-10-21T12:00:00.000Z');
 assert.ok(times.every(t => t.endsWith(':00:00.000Z')));
 
-// aggregateToday: windows by local hour (Toronto, EDT = UTC-4 in October)
+// sample hours for the week aggregation (Toronto, EDT = UTC-4 in October)
 const hours = [
-  { time: '2026-10-14T14:00:00Z', pop: 20, precip: 1, temp: 18.2, wind: 3, gust: 6, cloud: 10, tstorm: 0 },  // 10:00 local -> morning
-  { time: '2026-10-14T18:00:00Z', pop: 60, precip: 2, temp: 12.4, wind: 5, gust: 11, cloud: 90, tstorm: 0 }, // 14:00 local -> afternoon
-  { time: '2026-10-15T01:00:00Z', pop: 5,  precip: 0, temp: 6.1,  wind: null, gust: null, cloud: null, tstorm: null }, // 21:00 local -> night
+  { time: '2026-10-14T14:00:00Z', pop: 20, precip: 1, temp: 18.2, wind: 3, gust: 6, cloud: 10, tstorm: 0 },  // 10:00 local
+  { time: '2026-10-14T18:00:00Z', pop: 60, precip: 2, temp: 12.4, wind: 5, gust: 11, cloud: 90, tstorm: 0 }, // 14:00 local
+  { time: '2026-10-15T01:00:00Z', pop: 5,  precip: 0, temp: 6.1,  wind: null, gust: null, cloud: null, tstorm: null } // 21:00 local
 ];
-const per = aggregateToday(hours, 'America/Toronto');
-assert.deepEqual(per.morning, { pop: 20, precip: 1, hi: 18.2, lo: 18.2, wind: 3, gust: 6, cond: 'Sunny' });
-assert.deepEqual(per.afternoon, { pop: 60, precip: 2, hi: 12.4, lo: 12.4, wind: 5, gust: 11, cond: 'Cloudy' });
-assert.deepEqual(per.night, { pop: 5, precip: 0, hi: 6.1, lo: 6.1, wind: null, gust: null, cond: null });
-
-// a period with no hours at all keeps POP/precip at 0 and leaves the rest null
-const empty = aggregateToday([], 'America/Toronto');
-assert.deepEqual(empty.morning, { pop: 0, precip: 0, hi: null, lo: null, wind: null, gust: null, cond: null });
 
 // aggregateWeek: group by local date, pop=max, precip=sum
 const weekHours = [...hours, { time: '2026-10-15T14:00:00Z', pop: 30, precip: 4, temp: 15, wind: 8, gust: null, cloud: 45, tstorm: 40 }];
