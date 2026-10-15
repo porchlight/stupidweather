@@ -51,6 +51,48 @@ export function forecastTimes(now = new Date()) {
 
 function hourOf(iso, tz) { return Number(tzParts(iso, tz).hour); }
 
+const SEVERITY = ['Sunny', 'Partly cloudy', 'Cloudy', 'Thunderstorm'];
+
+export function conditionWord(cloud, tstorm) {
+  if (tstorm != null && tstorm >= 30) return 'Thunderstorm';
+  if (cloud == null) return '–';
+  if (cloud < 25) return 'Sunny';
+  if (cloud < 70) return 'Partly cloudy';
+  return 'Cloudy';
+}
+
+export function fmtTemp(t) { return t == null ? '–' : `${Math.round(t)}°`; }
+
+export function fmtKmh(ms) { return ms == null ? '–' : `${Math.round(ms * 3.6)}`; }
+
+export function fmtHiLo(hi, lo) {
+  if (hi == null || lo == null) return '–';
+  return `${Math.round(hi)}°/${Math.round(lo)}°`;
+}
+
+function worse(a, b) {
+  if (a == null) return b;
+  if (b == null) return a;
+  return SEVERITY.indexOf(b) > SEVERITY.indexOf(a) ? b : a;
+}
+
+function emptyStat() {
+  return { pop: 0, precip: 0, hi: null, lo: null, wind: null, gust: null, cond: null };
+}
+
+function addHour(stat, h) {
+  stat.pop = Math.max(stat.pop, h.pop ?? 0);
+  stat.precip += h.precip ?? 0;
+  if (h.temp != null) {
+    stat.hi = stat.hi == null ? h.temp : Math.max(stat.hi, h.temp);
+    stat.lo = stat.lo == null ? h.temp : Math.min(stat.lo, h.temp);
+  }
+  if (h.wind != null) stat.wind = stat.wind == null ? h.wind : Math.max(stat.wind, h.wind);
+  if (h.gust != null) stat.gust = stat.gust == null ? h.gust : Math.max(stat.gust, h.gust);
+  const c = conditionWord(h.cloud, h.tstorm);
+  if (c !== '–') stat.cond = worse(stat.cond, c);
+}
+
 export function aggregateToday(hours, tz) {
   const buckets = { morning: [], afternoon: [], night: [] };
   for (const h of hours) {
@@ -59,10 +101,7 @@ export function aggregateToday(hours, tz) {
     else if (hr >= 12 && hr < 18) buckets.afternoon.push(h);
     else buckets.night.push(h);
   }
-  const agg = list => ({
-    pop: list.length ? Math.max(...list.map(h => h.pop ?? 0)) : 0,
-    precip: list.reduce((s, h) => s + (h.precip ?? 0), 0)
-  });
+  const agg = list => { const s = emptyStat(); for (const h of list) addHour(s, h); return s; };
   return { morning: agg(buckets.morning), afternoon: agg(buckets.afternoon), night: agg(buckets.night) };
 }
 
@@ -70,10 +109,8 @@ export function aggregateWeek(hours, tz) {
   const map = new Map();
   for (const h of hours) {
     const key = dateKey(h.time, tz);
-    if (!map.has(key)) map.set(key, { date: key, pop: 0, precip: 0 });
-    const day = map.get(key);
-    day.pop = Math.max(day.pop, h.pop ?? 0);
-    day.precip += h.precip ?? 0;
+    if (!map.has(key)) map.set(key, { ...emptyStat(), date: key });
+    addHour(map.get(key), h);
   }
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }

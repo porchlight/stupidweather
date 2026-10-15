@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { tzParts, dateKey, forecastTimes, aggregateToday, aggregateWeek, pool, radarTimes, clockTime, dayLabel, weekLabel } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateToday, aggregateWeek, pool, radarTimes, clockTime, dayLabel, weekLabel, conditionWord, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -14,20 +14,46 @@ assert.ok(times.every(t => t.endsWith(':00:00.000Z')));
 
 // aggregateToday: windows by local hour (Toronto, EDT = UTC-4 in October)
 const hours = [
-  { time: '2026-10-14T14:00:00Z', pop: 20, precip: 1 }, // 10:00 local 10-14 -> morning
-  { time: '2026-10-14T18:00:00Z', pop: 60, precip: 2 }, // 14:00 local 10-14 -> afternoon
-  { time: '2026-10-15T01:00:00Z', pop: 5,  precip: 0 }, // 21:00 local 10-14 -> night
+  { time: '2026-10-14T14:00:00Z', pop: 20, precip: 1, temp: 18.2, wind: 3, gust: 6, cloud: 10, tstorm: 0 },  // 10:00 local -> morning
+  { time: '2026-10-14T18:00:00Z', pop: 60, precip: 2, temp: 12.4, wind: 5, gust: 11, cloud: 90, tstorm: 0 }, // 14:00 local -> afternoon
+  { time: '2026-10-15T01:00:00Z', pop: 5,  precip: 0, temp: 6.1,  wind: null, gust: null, cloud: null, tstorm: null }, // 21:00 local -> night
 ];
 const per = aggregateToday(hours, 'America/Toronto');
-assert.deepEqual(per.morning, { pop: 20, precip: 1 });
-assert.deepEqual(per.afternoon, { pop: 60, precip: 2 });
-assert.deepEqual(per.night, { pop: 5, precip: 0 });
+assert.deepEqual(per.morning, { pop: 20, precip: 1, hi: 18.2, lo: 18.2, wind: 3, gust: 6, cond: 'Sunny' });
+assert.deepEqual(per.afternoon, { pop: 60, precip: 2, hi: 12.4, lo: 12.4, wind: 5, gust: 11, cond: 'Cloudy' });
+assert.deepEqual(per.night, { pop: 5, precip: 0, hi: 6.1, lo: 6.1, wind: null, gust: null, cond: null });
 
-// aggregateWeek: group by local date, pop=max, precip=sum (crosses midnight UTC)
-const weekHours = [...hours, { time: '2026-10-15T14:00:00Z', pop: 30, precip: 4 }]; // 10:00 local 10-15
+// a period with no hours at all keeps POP/precip at 0 and leaves the rest null
+const empty = aggregateToday([], 'America/Toronto');
+assert.deepEqual(empty.morning, { pop: 0, precip: 0, hi: null, lo: null, wind: null, gust: null, cond: null });
+
+// aggregateWeek: group by local date, pop=max, precip=sum
+const weekHours = [...hours, { time: '2026-10-15T14:00:00Z', pop: 30, precip: 4, temp: 15, wind: 8, gust: null, cloud: 45, tstorm: 40 }];
 const week = aggregateWeek(weekHours, 'America/Toronto');
-assert.deepEqual(week[0], { date: '2026-10-14', pop: 60, precip: 3 });
-assert.deepEqual(week[1], { date: '2026-10-15', pop: 30, precip: 4 });
+assert.deepEqual(week[0], { date: '2026-10-14', pop: 60, precip: 3, hi: 18.2, lo: 6.1, wind: 5, gust: 11, cond: 'Cloudy' });
+assert.deepEqual(week[1], { date: '2026-10-15', pop: 30, precip: 4, hi: 15, lo: 15, wind: 8, gust: null, cond: 'Thunderstorm' });
+
+// conditionWord: thresholds at their boundaries, thunderstorm wins
+assert.equal(conditionWord(92, 0), 'Cloudy');
+assert.equal(conditionWord(70, 0), 'Cloudy');
+assert.equal(conditionWord(69, 0), 'Partly cloudy');
+assert.equal(conditionWord(25, 0), 'Partly cloudy');
+assert.equal(conditionWord(24, 0), 'Sunny');
+assert.equal(conditionWord(50, 30), 'Thunderstorm');
+assert.equal(conditionWord(50, 29), 'Partly cloudy');
+assert.equal(conditionWord(null, 40), 'Thunderstorm');
+assert.equal(conditionWord(null, null), '–');
+
+// unit and label helpers: null renders as an en dash, 0 is a real value
+assert.equal(fmtTemp(12.6), '13°');
+assert.equal(fmtTemp(null), '–');
+assert.equal(fmtTemp(undefined), '–');
+assert.equal(fmtKmh(3.7509854), '14');
+assert.equal(fmtKmh(0), '0');
+assert.equal(fmtKmh(null), '–');
+assert.equal(fmtHiLo(14.2, 6.1), '14°/6°');
+assert.equal(fmtHiLo(null, 6.1), '–');
+assert.equal(fmtHiLo(14.2, null), '–');
 
 // pool preserves order
 const out = await pool([1, 2, 3, 4], 2, async n => n * 10);
