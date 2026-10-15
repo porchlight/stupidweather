@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateWeek, radarTimes, clockTime, dayLabel, weekLabel, conditionWord, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -33,6 +33,7 @@ export async function refreshAll(loc) {
     const key = loc.lat + ',' + loc.lon;
     let hours = loadCachedForecast();
     let offline = false;
+    const radar = refreshRadar(loc);
     const paint = (hrs) => {
       if (seq !== refreshSeq) return;
       renderForecast(hrs, loc, { hourlyOnly: true });
@@ -45,7 +46,7 @@ export async function refreshAll(loc) {
     }
     if (seq !== refreshSeq) return;
     renderForecast(hours, loc);
-    await refreshRadar(loc);
+    await radar;
     if (seq !== refreshSeq) return;
     document.getElementById('lastUpdate').textContent = `Updated ${clockTime(new Date().toISOString(), loc.tz)} local${offline ? ' (offline)' : ''}`;
   } catch (err) {
@@ -211,35 +212,53 @@ function loadCachedForecast() {
   catch { return null; }
 }
 
-function hourlyTable(hours, tz) {
-  const rows = hours.slice(0, 12).map(h => {
-    return `<tr><td>${dayLabel(h.time, tz)}, ${clockTime(h.time, tz, false)}</td>`
-      + `<td>${Math.round(h.pop)}%</td><td>${h.precip.toFixed(1)}</td>`
-      + `<td>${fmtTemp(h.temp)}</td><td>${conditionWord(h.cloud, h.tstorm)}</td>`
-      + `<td>${fmtKmh(h.wind)}</td><td>${fmtKmh(h.gust)}</td></tr>`;
+function hourlyCards(hours, tz) {
+  const cards = hours.slice(0, 12).map(h => {
+    const cond = conditionWord(h.cloud, h.tstorm);
+    return `<article class="card">`
+      + `<h3 class="card-time">${dayLabel(h.time, tz)}, ${clockTime(h.time, tz, false)}</h3>`
+      + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
+      + `<div class="card-temp">${fmtTemp(h.temp)}</div>`
+      + `<div class="card-cond">${cond}</div>`
+      + `<dl class="card-stats">`
+      + `<div><dt>POP</dt><dd>${Math.round(h.pop)}%</dd></div>`
+      + `<div><dt>Precip (mm)</dt><dd>${h.precip.toFixed(1)}</dd></div>`
+      + `<div><dt>Wind (km/h)</dt><dd>${fmtKmh(h.wind)}</dd></div>`
+      + `<div><dt>Gust (km/h)</dt><dd>${fmtKmh(h.gust)}</dd></div>`
+      + `</dl></article>`;
   }).join('');
-  return `<table><thead><tr><th>Time</th><th>POP</th><th>Precip (mm)</th><th>Temp</th><th>Condition</th><th>Wind (km/h)</th><th>Gust (km/h)</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<div class="cards">${cards}</div>`;
 }
 
-function weekTable(hours, tz) {
+function weekCards(hours, tz) {
   const days = aggregateWeek(hours, tz);
-  const rows = days.map(d => {
-    return `<tr><td>${weekLabel(d.date)}</td><td>${Math.round(d.pop)}%</td><td>${d.precip.toFixed(1)}</td>`
-      + `<td>${fmtHiLo(d.hi, d.lo)}</td><td>${d.cond ?? '–'}</td>`
-      + `<td>${fmtKmh(d.wind)}</td><td>${fmtKmh(d.gust)}</td></tr>`;
+  const cards = days.map(d => {
+    const cond = d.cond ?? '–';
+    return `<article class="card">`
+      + `<h3 class="card-time">${weekLabel(d.date)}</h3>`
+      + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
+      + `<div class="card-temp">${fmtHiLo(d.hi, d.lo)}</div>`
+      + `<div class="card-cond">${cond}</div>`
+      + `<dl class="card-stats">`
+      + `<div><dt>POP</dt><dd>${Math.round(d.pop)}%</dd></div>`
+      + `<div><dt>Precip (mm)</dt><dd>${d.precip.toFixed(1)}</dd></div>`
+      + `<div><dt>Wind (km/h)</dt><dd>${fmtKmh(d.wind)}</dd></div>`
+      + `<div><dt>Gust (km/h)</dt><dd>${fmtKmh(d.gust)}</dd></div>`
+      + `</dl></article>`;
   }).join('');
-  return `<table><thead><tr><th>Day</th><th>POP</th><th>Precip (mm)</th><th>Temp</th><th>Condition</th><th>Wind (km/h)</th><th>Gust (km/h)</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<div class="cards">${cards}</div>`;
 }
 
 export function renderForecast(hours, loc, opts = {}) {
-  document.getElementById('tab-hourly').innerHTML = hourlyTable(hours, loc.tz);
+  document.getElementById('tab-hourly').innerHTML = hourlyCards(hours, loc.tz);
   if (opts.hourlyOnly) return;
-  document.getElementById('tab-week').innerHTML = weekTable(hours, loc.tz) + '<p>POP = daily max, precip = daily total.</p>';
+  document.getElementById('tab-week').innerHTML = weekCards(hours, loc.tz) + '<p class="note">POP = daily max, precip = daily total.</p>';
 }
 
 const RADAR_LAYER = 'RADAR_1KM_RRAI';
 let radarMap = null;
 let radarOverlay = null;
+let radarMarker = null;
 let radarFrames = [];
 let radarBounds = null;
 let radarIndex = 0;
@@ -263,7 +282,7 @@ export function initRadar(loc) {
     maxZoom: 18, attribution: '&copy; OpenStreetMap'
   }).addTo(radarMap);
   radarOverlay = L.imageOverlay('', radarMap.getBounds(), { opacity: 0.8, interactive: false }).addTo(radarMap);
-  L.circleMarker([loc.lat, loc.lon], { radius: 5 }).addTo(radarMap);
+  radarMarker = L.circleMarker([loc.lat, loc.lon], { radius: 5 }).addTo(radarMap);
   document.getElementById('playBtn').addEventListener('click', playRadar);
   document.getElementById('pauseBtn').addEventListener('click', pauseRadar);
   document.getElementById('speedInput').addEventListener('input', () => { if (radarTimer) { pauseRadar(); playRadar(); } });
@@ -272,21 +291,26 @@ export function initRadar(loc) {
 
 export async function refreshRadar(loc) {
   if (typeof L === 'undefined') return;
+  const seq = refreshSeq;
   initRadar(loc);
   radarMap.setView([loc.lat, loc.lon]);
+  if (radarMarker) radarMarker.setLatLng([loc.lat, loc.lon]);
   if (radarMap.getSize().x === 0) { radarFrames = []; return; }
   const bounds = radarMap.getBounds();
   radarBounds = bounds;
   const times = radarTimes(new Date());
-  radarFrames = await pool(times, 6, async (time) => {
+  const frames = await pool(times, 6, async (time) => {
     const url = radarFrameUrl(time, bounds);
     return { time, url };
   });
-  await Promise.all(radarFrames.map(f => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = f.url; })));
+  if (seq !== refreshSeq) return;
+  await Promise.all(frames.map(f => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = f.url; })));
+  if (seq !== refreshSeq) return;
+  radarFrames = frames;
   const slider = document.getElementById('frameSlider');
-  slider.max = String(radarFrames.length - 1);
+  slider.max = String(frames.length - 1);
   slider.value = '0';
-  showFrame(radarFrames.length - 1);
+  showFrame(frames.length - 1);
   playRadar();
 }
 
@@ -302,11 +326,11 @@ function showFrame(i) {
 
 function playRadar() {
   if (radarTimer || radarFrames.length < 2) return;
-  const speed = Number(document.getElementById('speedInput').value);
+  const el = document.getElementById('speedInput');
   radarTimer = setInterval(() => {
     if (radarIndex >= radarFrames.length - 1) radarIndex = -1;
     showFrame(radarIndex + 1);
-  }, speed);
+  }, radarDelay(el.value, el.min, el.max));
 }
 
 function pauseRadar() {

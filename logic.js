@@ -58,6 +58,17 @@ export function conditionWord(cloud, tstorm) {
   return 'Cloudy';
 }
 
+const CONDITION_EMOJI = {
+  'Sunny': '☀️',
+  'Partly cloudy': '⛅',
+  'Cloudy': '☁️',
+  'Thunderstorm': '⛈️'
+};
+
+export function conditionEmoji(cond) {
+  return CONDITION_EMOJI[cond] || '';
+}
+
 export function fmtTemp(t) { return t == null ? '–' : `${Math.round(t)}°`; }
 
 export function fmtKmh(ms) { return ms == null ? '–' : `${Math.round(ms * 3.6)}`; }
@@ -106,6 +117,11 @@ export function radarTimes(now = new Date(), count = 30) {
   const out = [];
   for (let i = count - 1; i >= 0; i--) out.push(new Date(end - i * step).toISOString());
   return out;
+}
+
+// speedInput is labelled "Speed": higher slider = faster, so map it to an inverse frame delay (ms)
+export function radarDelay(value, min, max) {
+  return Number(max) + Number(min) - Number(value);
 }
 
 export async function pool(items, limit, fn) {

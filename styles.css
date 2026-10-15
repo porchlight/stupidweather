@@ -1,17 +1,164 @@
 * { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, sans-serif; }
-header, nav, main { padding: .75rem; }
-nav { display: flex; gap: .5rem; flex-wrap: wrap; }
-nav button.active { font-weight: 700; text-decoration: underline; }
-.tab[hidden] { display: none; }
-table { width: 100%; border-collapse: collapse; }
-.tab { overflow-x: auto; }
-th, td { padding: .4rem .5rem; border: 1px solid #ddd; text-align: right; }
-th:first-child, td:first-child { text-align: left; }
-#radarMap { width: 100%; height: 65vh; background: #e8e8e8; }
-#radarControls { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: .5rem; }
-#status { color: #a00; font-size: .9rem; }
-#results { display: flex; flex-direction: column; gap: .25rem; margin-top: .4rem; }
+
+:root {
+  --red: #ff595e;
+  --yellow: #ffca3a;
+  --green: #8ac926;
+  --blue: #1982c4;
+  --purple: #6a4c93;
+  --ink: #6a4c93;
+  --on-bright: #1a1a2e;
+  --paper: #fbfbfe;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Nunito', system-ui, sans-serif;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(circle at 12% 0, rgba(255, 202, 58, .35), transparent 40%),
+    radial-gradient(circle at 88% 8%, rgba(25, 130, 196, .20), transparent 42%),
+    radial-gradient(circle at 50% 100%, rgba(138, 201, 38, .22), transparent 45%);
+}
+
+h1, h2, h3, button, .card-temp {
+  font-family: 'Bungee', system-ui, sans-serif;
+  letter-spacing: .02em;
+}
+
+:focus-visible { outline: 3px solid var(--on-bright); outline-offset: 2px; box-shadow: 0 0 0 5px var(--yellow); }
+
+/* Header: full-bleed band with a rainbow valance */
+header {
+  position: relative;
+  text-align: center;
+  padding: 1.25rem 1rem 1.5rem;
+  background: var(--purple);
+  color: #fff;
+}
+header::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 10px;
+  background: repeating-linear-gradient(90deg,
+    var(--red) 0 40px, var(--yellow) 40px 80px, var(--green) 80px 120px,
+    var(--blue) 120px 160px, var(--purple) 160px 200px);
+}
+header h1 {
+  margin: 0 0 .7rem;
+  color: #fff;
+  font-size: clamp(1.6rem, 6vw, 2.6rem);
+  text-shadow: 3px 3px 0 var(--red), 6px 6px 0 var(--blue);
+}
+#locationForm { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; }
+#locationForm label { align-self: center; color: #fff; font-weight: 800; }
+#locationForm input {
+  font: inherit;
+  padding: .6rem .9rem;
+  border: 3px solid var(--blue);
+  border-radius: 999px;
+  min-width: 0;
+  flex: 1 1 260px;
+  max-width: 420px;
+  color: var(--ink);
+  background: #fff;
+}
+#locationName { margin-top: .6rem; font-size: 1.2rem; font-weight: 800; }
+#lastUpdate { font-size: .9rem; opacity: .9; }
+#status { min-height: 1.2em; font-weight: 800; color: #fff; }
+
+/* Buttons */
+button {
+  font: inherit;
+  cursor: pointer;
+  padding: .55rem 1.1rem;
+  border: 3px solid var(--on-bright);
+  border-radius: 999px;
+  background: var(--yellow);
+  color: var(--on-bright);
+  box-shadow: 0 4px 0 var(--on-bright);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+button:hover, button:focus-visible { transform: translateY(-2px) rotate(-1.5deg); box-shadow: 0 6px 0 var(--on-bright); }
+button:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--on-bright); }
+
+/* Search results */
+#results { display: flex; flex-direction: column; gap: .4rem; max-width: 420px; margin: .6rem auto 0; }
 #results[hidden] { display: none; }
-#results button { font: inherit; text-align: left; padding: .35rem .5rem; border: 1px solid #ddd; background: #f7f7f7; cursor: pointer; }
-#results button:hover, #results button:focus { background: #eef; }
+#results button { text-align: left; background: #fff; color: var(--ink); border-color: var(--purple); }
+
+/* Nav tabs */
+nav { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; max-width: 960px; margin-inline: auto; padding: 1rem 1rem 0; }
+nav button { background: #fff; color: var(--ink); border-color: var(--blue); }
+nav button.active { background: var(--red); color: var(--on-bright); border-color: var(--on-bright); box-shadow: 0 4px 0 var(--on-bright), inset 0 0 0 2px var(--yellow); }
+
+/* Main + tabs */
+main { max-width: 960px; margin-inline: auto; padding: 0 1rem 2rem; }
+.tab[hidden] { display: none; }
+
+/* Weather cards */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.card {
+  position: relative;
+  overflow: hidden;
+  padding: 1.3rem .9rem 1rem;
+  text-align: center;
+  background: #fff;
+  border: 4px solid var(--purple);
+  border-radius: 18px;
+  box-shadow: 0 8px 0 rgba(106, 76, 147, .25);
+}
+.card:nth-child(odd) { transform: rotate(-1deg); }
+.card:nth-child(even) { transform: rotate(1deg); }
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 12px;
+  background: repeating-linear-gradient(90deg,
+    var(--red) 0 18px, var(--yellow) 18px 36px, var(--green) 36px 54px,
+    var(--blue) 54px 72px, var(--purple) 72px 90px);
+}
+.card-time { margin: 0 0 .2rem; font-size: .95rem; color: var(--purple); }
+.card-emoji { font-size: 2rem; line-height: 1; margin: .3rem 0; }
+.card-temp { margin: .2rem 0; font-size: 2.1rem; color: var(--purple); }
+.card-cond {
+  display: inline-block;
+  margin: 0 0 .7rem;
+  padding: .15rem .7rem;
+  font-weight: 800;
+  background: var(--yellow);
+  color: var(--on-bright);
+  border-radius: 999px;
+}
+.card-stats { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem .6rem; margin: 0; }
+.card-stats > div { padding: .35rem .2rem; border-radius: 10px; background: var(--green); }
+.card-stats > div:nth-child(odd) { background: var(--green); }
+.card-stats > div:nth-child(even) { background: var(--yellow); }
+.card-stats dt { font-size: .68rem; text-transform: uppercase; color: var(--on-bright); }
+.card-stats dd { margin: 0; font-weight: 800; color: var(--on-bright); }
+.note { text-align: center; font-weight: 800; color: var(--purple); }
+
+/* Radar */
+#radarControls { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; justify-content: center; margin: 1rem 0 .75rem; }
+#radarControls label { display: inline-flex; gap: .4rem; align-items: center; font-weight: 800; }
+input[type="range"] { accent-color: var(--blue); }
+#radarTime { font-weight: 800; color: var(--purple); }
+#radarMap { width: 100%; height: 65vh; border: 4px solid var(--purple); border-radius: 18px; }
+
+@media (max-width: 480px) {
+  #radarMap { height: 55vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
+  button:hover, button:focus-visible { transform: none; }
+}

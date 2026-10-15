@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, pool, radarTimes, clockTime, dayLabel, weekLabel, conditionWord, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -39,6 +39,14 @@ assert.equal(conditionWord(50, 29), 'Partly cloudy');
 assert.equal(conditionWord(null, 40), 'Thunderstorm');
 assert.equal(conditionWord(null, null), '–');
 
+// conditionEmoji: one emoji per condition, empty string when unknown
+assert.equal(conditionEmoji('Sunny'), '☀️');
+assert.equal(conditionEmoji('Partly cloudy'), '⛅');
+assert.equal(conditionEmoji('Cloudy'), '☁️');
+assert.equal(conditionEmoji('Thunderstorm'), '⛈️');
+assert.equal(conditionEmoji('–'), '');
+assert.equal(conditionEmoji(undefined), '');
+
 // unit and label helpers: null renders as an en dash, 0 is a real value
 assert.equal(fmtTemp(12.6), '13°');
 assert.equal(fmtTemp(null), '–');
@@ -61,6 +69,11 @@ assert.deepEqual(idx, [0, 1, 2]);
 // radarTimes: 6-min steps ending at the floor of now, oldest->newest
 const rt = radarTimes(new Date('2026-10-14T17:59:00Z'), 3);
 assert.deepEqual(rt, ['2026-10-14T17:42:00.000Z', '2026-10-14T17:48:00.000Z', '2026-10-14T17:54:00.000Z']);
+
+// radarDelay: slider max = fastest (smallest delay), slider min = slowest
+assert.equal(radarDelay('1200', '200', '1200'), 200);
+assert.equal(radarDelay('200', '200', '1200'), 1200);
+assert.equal(radarDelay('900', '200', '1200'), 500);
 
 // clockTime: 12-hour labels in the location tz (Toronto = UTC-4 in October)
 assert.equal(clockTime('2026-10-15T14:32:00Z', 'America/Toronto', true), '10:32 AM');
