@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateWeek, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -29,9 +29,11 @@ export async function refreshAll(loc) {
   if (!loc) { status.textContent = 'Search a city to begin.'; return; }
   status.textContent = '';
   const seq = ++refreshSeq;
+  const key = loc.lat + ',' + loc.lon;
+  let hours = loadCachedForecast();
+  const empty = !hours || localStorage.getItem('sw:forecastKey') !== key;
+  if (empty) showSkeleton();
   try {
-    const key = loc.lat + ',' + loc.lon;
-    let hours = loadCachedForecast();
     let offline = false;
     const radar = refreshRadar(loc);
     const paint = (hrs) => {
@@ -52,6 +54,10 @@ export async function refreshAll(loc) {
   } catch (err) {
     if (seq !== refreshSeq) return;
     status.textContent = 'Update failed: ' + err.message;
+    if (empty) {
+      document.getElementById('tab-hourly').innerHTML = '';
+      document.getElementById('tab-week').innerHTML = '';
+    }
     console.error(err);
   }
 }
@@ -247,6 +253,11 @@ function weekCards(hours, tz) {
       + `</dl></article>`;
   }).join('');
   return `<div class="cards">${cards}</div>`;
+}
+
+function showSkeleton() {
+  document.getElementById('tab-hourly').innerHTML = skeletonCards(12);
+  document.getElementById('tab-week').innerHTML = skeletonCards(7);
 }
 
 export function renderForecast(hours, loc, opts = {}) {
