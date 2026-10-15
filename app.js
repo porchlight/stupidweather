@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, tzParts, weekdayName, radarTimes } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, tzParts, weekdayName, radarTimes, dateKey } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -76,7 +76,8 @@ async function geocode(query) {
   if (!sjson.length) throw new Error('Location not found');
   const { lat, lon, display_name } = sjson[0];
   const tres = await fetch(`https://timeapi.io/api/TimeZone/coordinate?latitude=${lat}&longitude=${lon}`);
-  const tjson = await tres.json();
+  const tjson = await tres.json().catch(() => null);
+  if (!tres.ok || !tjson || !tjson.timeZone) throw new Error('Timezone lookup failed');
   return { name: display_name, lat: Number(lat), lon: Number(lon), tz: tjson.timeZone };
 }
 
@@ -127,13 +128,17 @@ async function pointValue(layer, lat, lon, time) {
 
 export async function fetchForecast(loc) {
   const times = forecastTimes(new Date());
-  const hours = await pool(times, 6, async (time) => {
+  const raw = await pool(times, 6, async (time) => {
     const [pop, precip] = await Promise.all([
       pointValue(LAYER_POP, loc.lat, loc.lon, time).catch(() => null),
       pointValue(LAYER_PCP, loc.lat, loc.lon, time).catch(() => null)
     ]);
-    return { time, pop: pop ?? 0, precip: precip ?? 0 };
+    return { time, pop, precip };
   });
+  if (raw.every(h => h.pop === null && h.precip === null)) {
+    throw new Error('Forecast data unavailable');
+  }
+  const hours = raw.map(h => ({ time: h.time, pop: h.pop ?? 0, precip: h.precip ?? 0 }));
   localStorage.setItem('sw:forecast', JSON.stringify(hours));
   localStorage.setItem('sw:forecastTs', String(Date.now()));
   localStorage.setItem('sw:forecastKey', loc.lat + ',' + loc.lon);
@@ -159,7 +164,9 @@ function hourlyTable(hours, tz) {
 }
 
 function todayTable(hours, tz) {
-  const per = aggregateToday(hours, tz);
+  const today = dateKey(new Date().toISOString(), tz);
+  const todays = hours.filter(h => dateKey(h.time, tz) === today);
+  const per = aggregateToday(todays, tz);
   const row = (label, v) => `<tr><td>${label}</td><td>${Math.round(v.pop)}%</td><td>${v.precip.toFixed(1)}</td></tr>`;
   return `<table><thead><tr><th>Period</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>`
     + row('Morning (6–12)', per.morning)
@@ -187,6 +194,7 @@ const RADAR_LAYER = 'RADAR_1KM_RRAI';
 let radarMap = null;
 let radarOverlay = null;
 let radarFrames = [];
+let radarBounds = null;
 let radarIndex = 0;
 let radarTimer = null;
 
@@ -216,9 +224,12 @@ export function initRadar(loc) {
 }
 
 export async function refreshRadar(loc) {
+  if (typeof L === 'undefined') return;
   initRadar(loc);
   radarMap.setView([loc.lat, loc.lon]);
+  if (radarMap.getSize().x === 0) { radarFrames = []; return; }
   const bounds = radarMap.getBounds();
+  radarBounds = bounds;
   const times = radarTimes(new Date());
   radarFrames = await pool(times, 6, async (time) => {
     const url = radarFrameUrl(time, bounds);
@@ -236,7 +247,7 @@ function showFrame(i) {
   radarIndex = Math.max(0, Math.min(i, radarFrames.length - 1));
   const f = radarFrames[radarIndex];
   if (!f) return;
-  radarOverlay.setBounds(radarMap.getBounds());
+  radarOverlay.setBounds(radarBounds || radarMap.getBounds());
   radarOverlay.setUrl(f.url);
   document.getElementById('frameSlider').value = String(radarIndex);
   const p = tzParts(f.time, currentLocation?.tz || 'UTC');
@@ -257,5 +268,11 @@ function pauseRadar() {
   radarTimer = null;
 }
 
-window.addEventListener('radar-shown', () => { if (radarMap) setTimeout(() => radarMap.invalidateSize(), 0); });
+window.addEventListener('radar-shown', () => {
+  if (!radarMap) return;
+  setTimeout(() => {
+    radarMap.invalidateSize();
+    if (!radarFrames.length && currentLocation) refreshRadar(currentLocation);
+  }, 0);
+});
 window.addEventListener('resize', () => { if (radarMap) radarMap.invalidateSize(); });

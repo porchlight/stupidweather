@@ -24,9 +24,10 @@ export function forecastTimes(now = new Date()) {
   const out = [];
   const hourlyHours = 48;
   for (let i = 0; i <= hourlyHours; i++) out.push(new Date(start.getTime() + i * 3600e3).toISOString());
+  const H3 = 3 * 3600e3;
   const end = start.getTime() + 7 * 24 * 3600e3;
-  let t = start.getTime() + (hourlyHours + 3) * 3600e3;
-  while (t < end) { out.push(new Date(t).toISOString()); t += 3 * 3600e3; }
+  let t = Math.ceil((start.getTime() + (hourlyHours + 3) * 3600e3) / H3) * H3;
+  while (t < end) { out.push(new Date(t).toISOString()); t += H3; }
   return out;
 }
 
