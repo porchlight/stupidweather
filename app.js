@@ -56,10 +56,19 @@ function init() {
   document.querySelectorAll('nav button').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
-  document.getElementById('locationForm').addEventListener('submit', e => {
+  document.getElementById('locationForm').addEventListener('submit', async e => {
     e.preventDefault();
     const q = document.getElementById('locationInput').value.trim();
-    if (q) setLocation(q);
+    if (!q) return;
+    const status = document.getElementById('status');
+    status.textContent = 'Searching…';
+    try {
+      renderResults(await searchPlaces(q));
+      status.textContent = '';
+    } catch (err) {
+      renderResults([]);
+      status.textContent = err.message;
+    }
   });
   const restored = restoreLocation();
   if (restored) onLocationChange(restored);
@@ -72,28 +81,48 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
-async function geocode(query) {
-  const search = new URLSearchParams({ format: 'json', limit: '1', q: query });
-  const sres = await fetch('https://nominatim.openstreetmap.org/search?' + search, {
+export async function searchPlaces(query) {
+  const search = new URLSearchParams({ format: 'json', limit: '5', q: query });
+  const res = await fetch('https://nominatim.openstreetmap.org/search?' + search, {
     headers: { 'Accept': 'application/json' }
   });
-  if (!sres.ok) throw new Error('Geocoding failed');
-  const sjson = await sres.json();
-  if (!sjson.length) throw new Error('Location not found');
-  const { lat, lon, display_name } = sjson[0];
-  const tres = await fetch(`https://timeapi.io/api/TimeZone/coordinate?latitude=${lat}&longitude=${lon}`);
-  const tjson = await tres.json().catch(() => null);
-  if (!tres.ok || !tjson || !tjson.timeZone) throw new Error('Timezone lookup failed');
-  return { name: display_name, lat: Number(lat), lon: Number(lon), tz: tjson.timeZone };
+  if (!res.ok) throw new Error('Geocoding failed');
+  const json = await res.json();
+  if (!json.length) throw new Error('Location not found');
+  return json.map(r => ({ lat: Number(r.lat), lon: Number(r.lon), name: r.display_name }));
 }
 
-async function setLocation(query) {
+export async function selectPlace(place) {
+  const tres = await fetch(`https://timeapi.io/api/TimeZone/coordinate?latitude=${place.lat}&longitude=${place.lon}`);
+  const tjson = await tres.json().catch(() => null);
+  if (!tres.ok || !tjson || !tjson.timeZone) throw new Error('Timezone lookup failed');
+  return { name: place.name, lat: place.lat, lon: place.lon, tz: tjson.timeZone };
+}
+
+function renderResults(list) {
+  const box = document.getElementById('results');
+  box.innerHTML = '';
+  box.hidden = !list.length;
+  for (const place of list) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = place.name;
+    btn.addEventListener('click', () => choosePlace(place));
+    box.appendChild(btn);
+  }
+}
+
+async function choosePlace(place) {
   const status = document.getElementById('status');
-  status.textContent = 'Searching…';
+  status.textContent = 'Loading…';
   try {
-    currentLocation = await geocode(query);
+    currentLocation = await selectPlace(place);
     localStorage.setItem('sw:location', JSON.stringify(currentLocation));
     document.getElementById('locationName').textContent = currentLocation.name;
+    const box = document.getElementById('results');
+    box.innerHTML = '';
+    box.hidden = true;
+    document.getElementById('locationInput').value = '';
     status.textContent = '';
     await onLocationChange(currentLocation);
   } catch (err) {
