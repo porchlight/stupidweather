@@ -274,6 +274,8 @@ let radarFrames = [];
 let radarBounds = null;
 let radarIndex = 0;
 let radarTimer = null;
+let radarSeq = 0;
+let radarMoveTimer = null;
 
 function radarFrameUrl(time, bounds) {
   const p = new URLSearchParams({
@@ -288,24 +290,28 @@ function radarFrameUrl(time, bounds) {
 
 export function initRadar(loc) {
   if (radarMap) return;
-  radarMap = L.map('radarMap').setView([loc.lat, loc.lon], 7);
+  radarMap = L.map('radarMap', { zoomControl: false }).setView([loc.lat, loc.lon], 7);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18, attribution: '&copy; OpenStreetMap'
   }).addTo(radarMap);
   radarOverlay = L.imageOverlay('', radarMap.getBounds(), { opacity: 0.8, interactive: false }).addTo(radarMap);
   radarMarker = L.circleMarker([loc.lat, loc.lon], { radius: 5 }).addTo(radarMap);
+  radarMap.on('moveend', onRadarMove);
   document.getElementById('playBtn').addEventListener('click', playRadar);
   document.getElementById('pauseBtn').addEventListener('click', pauseRadar);
   document.getElementById('speedInput').addEventListener('input', () => { if (radarTimer) { pauseRadar(); playRadar(); } });
   document.getElementById('frameSlider').addEventListener('input', e => { pauseRadar(); showFrame(Number(e.target.value)); });
 }
 
-export async function refreshRadar(loc) {
+export async function refreshRadar(loc, opts = {}) {
   if (typeof L === 'undefined') return;
   const seq = refreshSeq;
+  const mine = ++radarSeq;
   initRadar(loc);
-  radarMap.setView([loc.lat, loc.lon]);
-  if (radarMarker) radarMarker.setLatLng([loc.lat, loc.lon]);
+  if (opts.recenter !== false) {
+    radarMap.setView([loc.lat, loc.lon]);
+    if (radarMarker) radarMarker.setLatLng([loc.lat, loc.lon]);
+  }
   if (radarMap.getSize().x === 0) { radarFrames = []; return; }
   const bounds = radarMap.getBounds();
   radarBounds = bounds;
@@ -316,9 +322,9 @@ export async function refreshRadar(loc) {
     const url = radarFrameUrl(time, bounds);
     return { time, url };
   });
-  if (seq !== refreshSeq) { mapEl.classList.remove('loading'); return; }
+  if (seq !== refreshSeq || mine !== radarSeq) { mapEl.classList.remove('loading'); return; }
   await Promise.all(frames.map(f => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = f.url; })));
-  if (seq !== refreshSeq) { mapEl.classList.remove('loading'); return; }
+  if (seq !== refreshSeq || mine !== radarSeq) { mapEl.classList.remove('loading'); return; }
   radarFrames = frames;
   const slider = document.getElementById('frameSlider');
   slider.max = String(frames.length - 1);
@@ -326,6 +332,16 @@ export async function refreshRadar(loc) {
   showFrame(frames.length - 1);
   mapEl.classList.remove('loading');
   playRadar();
+}
+
+// ponytail: refetches all ~30 full-map frames per pan (heavy on the live WMS); move to a viewport-driven L.tileLayer.wms if that bites
+function onRadarMove() {
+  clearTimeout(radarMoveTimer);
+  radarMoveTimer = setTimeout(() => {
+    if (!currentLocation) return;
+    if (radarBounds && radarMap.getBounds().equals(radarBounds)) return;
+    refreshRadar(currentLocation, { recenter: false });
+  }, 400);
 }
 
 function showFrame(i) {
