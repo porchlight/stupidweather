@@ -30,8 +30,15 @@ export async function refreshAll(loc) {
     const key = loc.lat + ',' + loc.lon;
     let hours = loadCachedForecast();
     let offline = false;
+    let lastPaint = 0;
+    const paint = (hrs, hourlyOnly) => {
+      const now = Date.now();
+      if (hourlyOnly && now - lastPaint < 500) return;
+      lastPaint = now;
+      renderForecast(hrs, loc, { hourlyOnly });
+    };
     try {
-      if (!hours || forecastIsStale() || localStorage.getItem('sw:forecastKey') !== key) hours = await fetchForecast(loc);
+      if (!hours || forecastIsStale() || localStorage.getItem('sw:forecastKey') !== key) hours = await fetchForecast(loc, paint);
     } catch (e) {
       if (!hours) throw e;
       offline = true;
@@ -108,6 +115,12 @@ function restoreLocation() {
 const WMS = 'https://geo.weather.gc.ca/geomet';
 const LAYER_POP = 'GDPS-WEonG_15km_Precip-Prob';
 const LAYER_PCP = 'GDPS_15km_Precip-Accum1h';
+const LAYER_TEMP = 'GDPS_15km_AirTemp_2m';
+const LAYER_WIND = 'GDPS_15km_WindSpeed_10m';
+const LAYER_GUST = 'GDPS_15km_WindGust_10m';
+const LAYER_CLOUD = 'GDPS_15km_TotalCloudCover';
+const LAYER_TSTORM = 'GDPS-WEonG_15km_Thunderstorm-Prob';
+const FORECAST_VER = '2';
 
 async function pointValue(layer, lat, lon, time) {
   const d = 0.2;
@@ -125,23 +138,49 @@ async function pointValue(layer, lat, lon, time) {
   return f && typeof f.properties.value === 'number' ? f.properties.value : null;
 }
 
-export async function fetchForecast(loc) {
+export async function fetchForecast(loc, onProgress) {
   const times = forecastTimes(new Date());
-  const raw = await pool(times, 6, async (time) => {
+
+  const base = await pool(times, 6, async time => {
     const [pop, precip] = await Promise.all([
       pointValue(LAYER_POP, loc.lat, loc.lon, time).catch(() => null),
       pointValue(LAYER_PCP, loc.lat, loc.lon, time).catch(() => null)
     ]);
     return { time, pop, precip };
   });
-  if (raw.every(h => h.pop === null && h.precip === null)) {
+  if (base.every(h => h.pop === null && h.precip === null)) {
     throw new Error('Forecast data unavailable');
   }
-  const hours = raw.map(h => ({ time: h.time, pop: h.pop ?? 0, precip: h.precip ?? 0 }));
+
+  const hours = base.map(h => ({
+    time: h.time, pop: h.pop ?? 0, precip: h.precip ?? 0,
+    temp: null, wind: null, gust: null, cloud: null, tstorm: null
+  }));
+  writeForecast(hours, loc);
+  if (onProgress) onProgress(hours, false);
+
+  await pool(times, 6, async (time, i) => {
+    const [temp, wind, gust, cloud, tstorm] = await Promise.all([
+      pointValue(LAYER_TEMP, loc.lat, loc.lon, time).catch(() => null),
+      pointValue(LAYER_WIND, loc.lat, loc.lon, time).catch(() => null),
+      pointValue(LAYER_GUST, loc.lat, loc.lon, time).catch(() => null),
+      pointValue(LAYER_CLOUD, loc.lat, loc.lon, time).catch(() => null),
+      pointValue(LAYER_TSTORM, loc.lat, loc.lon, time).catch(() => null)
+    ]);
+    Object.assign(hours[i], { temp, wind, gust, cloud, tstorm });
+    if (onProgress) onProgress(hours, true);
+  });
+
+  writeForecast(hours, loc);
+  if (onProgress) onProgress(hours, false);
+  return hours;
+}
+
+function writeForecast(hours, loc) {
   localStorage.setItem('sw:forecast', JSON.stringify(hours));
   localStorage.setItem('sw:forecastTs', String(Date.now()));
   localStorage.setItem('sw:forecastKey', loc.lat + ',' + loc.lon);
-  return hours;
+  localStorage.setItem('sw:forecastVer', FORECAST_VER);
 }
 
 export function forecastIsStale() {
@@ -150,6 +189,7 @@ export function forecastIsStale() {
 }
 
 function loadCachedForecast() {
+  if (localStorage.getItem('sw:forecastVer') !== FORECAST_VER) return null;
   try { return JSON.parse(localStorage.getItem('sw:forecast') || 'null'); }
   catch { return null; }
 }
@@ -188,8 +228,9 @@ function weekTable(hours, tz) {
   return `<table><thead><tr><th>Day</th><th>POP</th><th>Precip (mm)</th><th>Temp</th><th>Condition</th><th>Wind (km/h)</th><th>Gust (km/h)</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-export function renderForecast(hours, loc) {
+export function renderForecast(hours, loc, opts = {}) {
   document.getElementById('tab-hourly').innerHTML = hourlyTable(hours, loc.tz);
+  if (opts.hourlyOnly) return;
   document.getElementById('tab-today').innerHTML = todayTable(hours, loc.tz) + '<p>POP = period max, precip = period total.</p>';
   document.getElementById('tab-week').innerHTML = weekTable(hours, loc.tz) + '<p>POP = daily max, precip = daily total.</p>';
 }
