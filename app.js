@@ -75,7 +75,6 @@ function init() {
   else document.getElementById('status').textContent = 'Search a city to begin.';
   switchTab('hourly');
 }
-init();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -349,3 +348,4 @@ window.addEventListener('radar-shown', () => {
   }, 0);
 });
 window.addEventListener('resize', () => { if (radarMap) radarMap.invalidateSize(); });
+init();
