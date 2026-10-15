@@ -14,6 +14,8 @@ let currentLocation = null;
 
 let refreshTimer = null;
 
+let refreshSeq = 0;
+
 let onLocationChange = async (loc) => {
   clearInterval(refreshTimer);
   refreshTimer = null;
@@ -26,12 +28,14 @@ export async function refreshAll(loc) {
   const status = document.getElementById('status');
   if (!loc) { status.textContent = 'Search a city to begin.'; return; }
   status.textContent = '';
+  const seq = ++refreshSeq;
   try {
     const key = loc.lat + ',' + loc.lon;
     let hours = loadCachedForecast();
     let offline = false;
     let lastPaint = 0;
     const paint = (hrs, hourlyOnly) => {
+      if (seq !== refreshSeq) return;
       const now = Date.now();
       if (hourlyOnly && now - lastPaint < 500) return;
       lastPaint = now;
@@ -43,10 +47,13 @@ export async function refreshAll(loc) {
       if (!hours) throw e;
       offline = true;
     }
+    if (seq !== refreshSeq) return;
     renderForecast(hours, loc);
     await refreshRadar(loc);
+    if (seq !== refreshSeq) return;
     document.getElementById('lastUpdate').textContent = `Updated ${clockTime(new Date().toISOString(), loc.tz)} local${offline ? ' (offline)' : ''}`;
   } catch (err) {
+    if (seq !== refreshSeq) return;
     status.textContent = 'Update failed: ' + err.message;
     console.error(err);
   }

@@ -59,6 +59,10 @@ assert.equal(fmtHiLo(14.2, null), '–');
 const out = await pool([1, 2, 3, 4], 2, async n => n * 10);
 assert.deepEqual(out, [10, 20, 30, 40]);
 
+// pool passes the index as the second argument (hours[i] alignment)
+const idx = await pool([10, 20, 30], 2, async (n, i) => i);
+assert.deepEqual(idx, [0, 1, 2]);
+
 // radarTimes: 6-min steps ending at the floor of now, oldest->newest
 const rt = radarTimes(new Date('2026-10-14T17:59:00Z'), 3);
 assert.deepEqual(rt, ['2026-10-14T17:42:00.000Z', '2026-10-14T17:48:00.000Z', '2026-10-14T17:54:00.000Z']);
