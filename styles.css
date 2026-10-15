@@ -172,7 +172,22 @@ main { max-width: 960px; margin-inline: auto; padding: 0 1rem 2rem; }
 #radarControls label { display: inline-flex; gap: .4rem; align-items: center; font-weight: 800; }
 input[type="range"] { accent-color: var(--blue); }
 #radarTime { font-weight: 800; color: var(--purple); }
-#radarMap { width: 100%; height: 65vh; border: 4px solid var(--purple); border-radius: 18px; }
+#radarMap { width: 100%; height: 65vh; border: 4px solid var(--purple); border-radius: 18px; position: relative; }
+#radarMap.loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  border-radius: 14px;
+  background-image: linear-gradient(100deg,
+    rgba(251, 251, 254, .55) 30%, rgba(251, 251, 254, .15) 50%, rgba(251, 251, 254, .55) 70%);
+  background-size: 200% 100%;
+  animation: sk-sweep 1.6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  #radarMap.loading::after { animation: none; background-image: none; background-color: rgba(251, 251, 254, .3); }
+}
 
 @media (max-width: 480px) {
   #radarMap { height: 55vh; }

@@ -309,19 +309,22 @@ export async function refreshRadar(loc) {
   if (radarMap.getSize().x === 0) { radarFrames = []; return; }
   const bounds = radarMap.getBounds();
   radarBounds = bounds;
+  const mapEl = document.getElementById('radarMap');
+  mapEl.classList.add('loading');
   const times = radarTimes(new Date());
   const frames = await pool(times, 6, async (time) => {
     const url = radarFrameUrl(time, bounds);
     return { time, url };
   });
-  if (seq !== refreshSeq) return;
+  if (seq !== refreshSeq) { mapEl.classList.remove('loading'); return; }
   await Promise.all(frames.map(f => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = f.url; })));
-  if (seq !== refreshSeq) return;
+  if (seq !== refreshSeq) { mapEl.classList.remove('loading'); return; }
   radarFrames = frames;
   const slider = document.getElementById('frameSlider');
   slider.max = String(frames.length - 1);
   slider.value = '0';
   showFrame(frames.length - 1);
+  mapEl.classList.remove('loading');
   playRadar();
 }
 
