@@ -11,7 +11,30 @@ export function switchTab(name) {
 }
 
 let currentLocation = null;
-let onLocationChange = () => {};
+
+let refreshTimer = null;
+
+let onLocationChange = async (loc) => {
+  await refreshAll(loc);
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => refreshAll(loc), REFRESH_MS);
+};
+
+export async function refreshAll(loc) {
+  const status = document.getElementById('status');
+  status.textContent = '';
+  try {
+    let hours = loadCachedForecast();
+    if (!hours || forecastIsStale()) hours = await fetchForecast(loc);
+    renderForecast(hours, loc);
+    await refreshRadar(loc);
+    const p = tzParts(new Date().toISOString(), loc.tz);
+    document.getElementById('lastUpdate').textContent = `Updated ${p.hour}:${p.minute} local`;
+  } catch (err) {
+    status.textContent = 'Update failed: ' + err.message;
+    console.error(err);
+  }
+}
 
 function init() {
   document.querySelectorAll('nav button').forEach(btn => {
@@ -221,3 +244,6 @@ function pauseRadar() {
   clearInterval(radarTimer);
   radarTimer = null;
 }
+
+window.addEventListener('radar-shown', () => { if (radarMap) setTimeout(() => radarMap.invalidateSize(), 0); });
+window.addEventListener('resize', () => { if (radarMap) radarMap.invalidateSize(); });
