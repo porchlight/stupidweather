@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -102,5 +102,11 @@ assert.match(html, /<meta name="twitter:card" content="summary">/);
 assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="icon\.svg">/);
 assert.equal(manifest.theme_color, '#6a4c93');
 assert.ok(manifest.icons.length > 0);
+
+// skeletonCards: n placeholder cards inside the standard cards wrapper
+assert.ok(skeletonCards(3).startsWith('<div class="cards">'));
+assert.equal((skeletonCards(3).match(/card skeleton/g) || []).length, 3);
+assert.equal((skeletonCards(12).match(/card skeleton/g) || []).length, 12);
+assert.equal((skeletonCards(3).match(/class="sk /g) || []).length, 24);
 
 console.log('selfcheck OK');

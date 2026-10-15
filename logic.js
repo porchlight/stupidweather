@@ -132,3 +132,15 @@ export async function pool(items, limit, fn) {
   }));
   return out;
 }
+
+export function skeletonCards(n) {
+  const card = '<article class="card skeleton" aria-hidden="true">'
+    + '<span class="sk sk-time"></span>'
+    + '<span class="sk sk-emoji"></span>'
+    + '<span class="sk sk-temp"></span>'
+    + '<span class="sk sk-cond"></span>'
+    + '<dl class="card-stats">'
+    + '<div><span class="sk sk-line"></span></div>'.repeat(4)
+    + '</dl></article>';
+  return `<div class="cards">${card.repeat(n)}</div>`;
+}
