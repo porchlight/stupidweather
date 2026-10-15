@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, dateKey, radarTimes, clockTime, dayLabel, weekLabel } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateToday, aggregateWeek, dateKey, radarTimes, clockTime, dayLabel, weekLabel, conditionWord, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -156,17 +156,22 @@ function loadCachedForecast() {
 
 function hourlyTable(hours, tz) {
   const rows = hours.slice(0, 48).map(h => {
-    return `<tr><td>${dayLabel(h.time, tz)}, ${clockTime(h.time, tz, false)}</td><td>${Math.round(h.pop)}%</td><td>${h.precip.toFixed(1)}</td></tr>`;
+    return `<tr><td>${dayLabel(h.time, tz)}, ${clockTime(h.time, tz, false)}</td>`
+      + `<td>${Math.round(h.pop)}%</td><td>${h.precip.toFixed(1)}</td>`
+      + `<td>${fmtTemp(h.temp)}</td><td>${conditionWord(h.cloud, h.tstorm)}</td>`
+      + `<td>${fmtKmh(h.wind)}</td><td>${fmtKmh(h.gust)}</td></tr>`;
   }).join('');
-  return `<table><thead><tr><th>Time</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table><thead><tr><th>Time</th><th>POP</th><th>Precip (mm)</th><th>Temp</th><th>Condition</th><th>Wind (km/h)</th><th>Gust (km/h)</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function todayTable(hours, tz) {
   const today = dateKey(new Date().toISOString(), tz);
   const todays = hours.filter(h => dateKey(h.time, tz) === today);
   const per = aggregateToday(todays, tz);
-  const row = (label, v) => `<tr><td>${label}</td><td>${Math.round(v.pop)}%</td><td>${v.precip.toFixed(1)}</td></tr>`;
-  return `<table><thead><tr><th>Period</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>`
+  const row = (label, v) => `<tr><td>${label}</td><td>${Math.round(v.pop)}%</td><td>${v.precip.toFixed(1)}</td>`
+    + `<td>${fmtHiLo(v.hi, v.lo)}</td><td>${v.cond ?? '–'}</td>`
+    + `<td>${fmtKmh(v.wind)}</td><td>${fmtKmh(v.gust)}</td></tr>`;
+  return `<table><thead><tr><th>Period</th><th>POP</th><th>Precip (mm)</th><th>Temp</th><th>Condition</th><th>Wind (km/h)</th><th>Gust (km/h)</th></tr></thead><tbody>`
     + row('Morning', per.morning)
     + row('Afternoon', per.afternoon)
     + row('Night', per.night)
@@ -176,9 +181,11 @@ function todayTable(hours, tz) {
 function weekTable(hours, tz) {
   const days = aggregateWeek(hours, tz);
   const rows = days.map(d => {
-    return `<tr><td>${weekLabel(d.date)}</td><td>${Math.round(d.pop)}%</td><td>${d.precip.toFixed(1)}</td></tr>`;
+    return `<tr><td>${weekLabel(d.date)}</td><td>${Math.round(d.pop)}%</td><td>${d.precip.toFixed(1)}</td>`
+      + `<td>${fmtHiLo(d.hi, d.lo)}</td><td>${d.cond ?? '–'}</td>`
+      + `<td>${fmtKmh(d.wind)}</td><td>${fmtKmh(d.gust)}</td></tr>`;
   }).join('');
-  return `<table><thead><tr><th>Day</th><th>POP</th><th>Precip (mm)</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return `<table><thead><tr><th>Day</th><th>POP</th><th>Precip (mm)</th><th>Temp</th><th>Condition</th><th>Wind (km/h)</th><th>Gust (km/h)</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 export function renderForecast(hours, loc) {
