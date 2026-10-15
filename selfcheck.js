@@ -93,7 +93,7 @@ assert.equal(weekLabel('2026-10-19'), 'Oct 19 Monday');
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 const manifest = JSON.parse(readFileSync(new URL('./manifest.webmanifest', import.meta.url), 'utf8'));
 assert.match(html, /<title>Stupid Weather<\/title>/);
-assert.match(html, /<meta name="description" content="[^"]+"/);
+assert.match(html, /<meta\s+name="description"\s+content="[^"]+"/);
 assert.match(html, /<meta property="og:title"/);
 assert.match(html, /<meta property="og:description"/);
 assert.match(html, /<meta property="og:type" content="website">/);
