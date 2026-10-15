@@ -40,12 +40,11 @@ export function weekLabel(key) {
 export function forecastTimes(now = new Date()) {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
   const out = [];
-  const hourlyHours = 48;
-  for (let i = 0; i <= hourlyHours; i++) out.push(new Date(start.getTime() + i * 3600e3).toISOString());
-  const H3 = 3 * 3600e3;
+  for (let i = 0; i < 12; i++) out.push(new Date(start.getTime() + i * 3600e3).toISOString());
+  const H6 = 6 * 3600e3;
   const end = start.getTime() + 7 * 24 * 3600e3;
-  let t = Math.ceil((start.getTime() + (hourlyHours + 3) * 3600e3) / H3) * H3;
-  while (t < end) { out.push(new Date(t).toISOString()); t += H3; }
+  let t = Math.ceil((start.getTime() + 12 * 3600e3) / H6) * H6;
+  while (t < end) { out.push(new Date(t).toISOString()); t += H6; }
   return out;
 }
 

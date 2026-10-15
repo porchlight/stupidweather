@@ -6,10 +6,13 @@ assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
   { year: '2026', month: '10', day: '14', hour: '22', minute: '00' });
 assert.equal(dateKey('2026-10-15T02:00:00Z', 'America/Toronto'), '2026-10-14');
 
-// forecastTimes: 49 hourly points then 3-hourly, all on :00
+// forecastTimes: 12 hourly points then 6-hourly out to 7 days, all on :00
 const times = forecastTimes(new Date('2026-10-14T17:30:00Z'));
+assert.equal(times.length, 38);
 assert.equal(times[0], '2026-10-14T17:00:00.000Z');
-assert.equal(times[48], '2026-10-16T17:00:00.000Z');
+assert.equal(times[11], '2026-10-15T04:00:00.000Z');
+assert.equal(times[12], '2026-10-15T06:00:00.000Z');
+assert.equal(times[times.length - 1], '2026-10-21T12:00:00.000Z');
 assert.ok(times.every(t => t.endsWith(':00:00.000Z')));
 
 // aggregateToday: windows by local hour (Toronto, EDT = UTC-4 in October)
