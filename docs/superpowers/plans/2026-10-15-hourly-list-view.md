@@ -36,8 +36,9 @@
 In `selfcheck.js`, add `groupByDay` to the `logic.js` import on line 3, then add this block after the existing `weekLabel` asserts (around line 91):
 
 ```js
-// groupByDay: buckets by local date key, sorted ascending
-const grouped = groupByDay(hours, 'America/Toronto');
+// groupByDay: buckets by local date key across days, sorted ascending
+// (the shared `hours` fixture all lands on Oct 14 local; add an Oct 15 local hour)
+const grouped = groupByDay([{ time: '2026-10-15T14:00:00Z' }, hours[0], hours[1]], 'America/Toronto');
 assert.equal(grouped.length, 2);
 assert.equal(grouped[0].date, '2026-10-14');
 assert.equal(grouped[0].hours.length, 2);
@@ -45,6 +46,8 @@ assert.equal(grouped[1].date, '2026-10-15');
 assert.equal(grouped[1].hours.length, 1);
 assert.equal(grouped[0].hours[0].time, '2026-10-14T14:00:00Z');
 ```
+
+Note: the shared `hours` fixture's three entries are all on Oct 14 local (`2026-10-15T01:00:00Z` is 21:00 Oct 14 in Toronto), so passing `hours` directly cannot yield two groups. The array above adds one Oct-15-local hour, passed first, so the ascending sort is genuinely exercised.
 
 - [ ] **Step 2: Run test to verify it fails**
 
