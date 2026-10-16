@@ -290,7 +290,7 @@ function radarFrameUrl(time, bounds) {
 
 export function initRadar(loc) {
   if (radarMap) return;
-  radarMap = L.map('radarMap', { zoomControl: false }).setView([loc.lat, loc.lon], 7);
+  radarMap = L.map('radarMap').setView([loc.lat, loc.lon], 7);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18, attribution: '&copy; OpenStreetMap'
   }).addTo(radarMap);
