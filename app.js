@@ -80,6 +80,10 @@ function init() {
       status.textContent = err.message;
     }
   });
+  const installModal = document.getElementById('installModal');
+  document.getElementById('installBtn').addEventListener('click', () => installModal.showModal());
+  document.getElementById('installClose').addEventListener('click', () => installModal.close());
+  installModal.addEventListener('click', e => { if (e.target === installModal) installModal.close(); });
   const restored = restoreLocation();
   if (restored) onLocationChange(restored);
   else document.getElementById('status').textContent = 'Search a city to begin.';

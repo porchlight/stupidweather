@@ -38,6 +38,7 @@
 
 <body>
   <header>
+    <button id="installBtn" type="button" aria-haspopup="dialog">Install app</button>
     <h1>Stupid Weather</h1>
     <form id="locationForm">
       <label for="locationInput">City</label>
@@ -68,6 +69,27 @@
       <div id="radarMap"></div>
     </section>
   </main>
+  <dialog id="installModal" aria-labelledby="installTitle">
+    <h2 id="installTitle">Add Stupid Weather to your home screen</h2>
+    <p>Install it like an app — no app store needed.</p>
+    <section>
+      <h3>iPhone (Safari)</h3>
+      <ol>
+        <li>Tap the <strong>Share</strong> button.</li>
+        <li>Choose <strong>Add to Home Screen</strong>.</li>
+        <li>Tap <strong>Add</strong>.</li>
+      </ol>
+    </section>
+    <section>
+      <h3>Android (Chrome)</h3>
+      <ol>
+        <li>Open the <strong>three-dot menu</strong>.</li>
+        <li>Choose <strong>Add to Home screen</strong> (or <strong>Install app</strong>).</li>
+        <li>Confirm <strong>Install</strong>.</li>
+      </ol>
+    </section>
+    <button id="installClose" type="button">Close</button>
+  </dialog>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module" src="app.js"></script>
 </body>
