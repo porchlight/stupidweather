@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -158,5 +158,10 @@ assert.ok(skeletonCards(3).startsWith('<div class="cards">'));
 assert.equal((skeletonCards(3).match(/card skeleton/g) || []).length, 3);
 assert.equal((skeletonCards(12).match(/card skeleton/g) || []).length, 12);
 assert.equal((skeletonCards(3).match(/class="sk /g) || []).length, 24);
+
+// skeletonRows: n list-row placeholders in the hourly wrapper
+assert.ok(skeletonRows(3).startsWith('<div class="hourly">'));
+assert.equal((skeletonRows(4).match(/hour-row/g) || []).length, 4);
+assert.ok(skeletonRows(2).includes('aria-hidden="true"'));
 
 console.log('selfcheck OK');

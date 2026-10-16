@@ -175,3 +175,11 @@ export function skeletonCards(n) {
     + '</dl></article>';
   return `<div class="cards">${card.repeat(n)}</div>`;
 }
+
+export function skeletonRows(n) {
+  const row = '<article class="hour-row skeleton" aria-hidden="true">'
+    + '<div class="hour-main"><span class="sk sk-time"></span></div>'
+    + '<div class="hour-stats"><span class="sk sk-line"></span></div>'
+    + '</article>';
+  return `<div class="hourly">${row.repeat(n)}</div>`;
+}
