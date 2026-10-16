@@ -180,7 +180,7 @@ export async function fetchForecast(loc, onProgress) {
   const times = forecastTimes(new Date());
   const hours = new Array(times.length);
   let anyData = false;
-  await pool(times, 5, async (time, i) => {
+  await pool(times, 4, async (time, i) => {
     const [pop, precip, temp, wind, gust, cloud, tstorm] = await Promise.all([
       pointValue(LAYER_POP, loc.lat, loc.lon, time),
       pointValue(LAYER_PCP, loc.lat, loc.lon, time),
