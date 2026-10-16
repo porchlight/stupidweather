@@ -203,7 +203,8 @@ input[type="range"] { accent-color: var(--blue); }
   letter-spacing: .08em;
   color: var(--purple);
   border-bottom: 2px dotted rgba(106, 76, 147, .4);
-  border-left: 8px solid var(--blue);
+  padding-left: 1.25rem;
+  background: linear-gradient(180deg, var(--red), var(--yellow), var(--green), var(--blue), var(--purple)) left / 8px 100% no-repeat;
 }
 .hour-head:first-child { margin-top: 0; }
 .hour-row {

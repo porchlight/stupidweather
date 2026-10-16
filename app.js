@@ -264,7 +264,7 @@ function weekCards(hours, tz) {
 }
 
 function showSkeleton() {
-  document.getElementById('tab-hourly').innerHTML = skeletonRows(8);
+  document.getElementById('tab-hourly').innerHTML = skeletonRows(12);
   document.getElementById('tab-week').innerHTML = skeletonCards(7);
 }
 
