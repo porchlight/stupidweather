@@ -121,6 +121,16 @@ export function aggregateWeek(hours, tz) {
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export function groupByDay(hours, tz) {
+  const map = new Map();
+  for (const h of hours) {
+    const key = dateKey(h.time, tz);
+    if (!map.has(key)) map.set(key, { date: key, hours: [] });
+    map.get(key).hours.push(h);
+  }
+  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export function radarTimes(now = new Date(), count = 30) {
   const step = 6 * 60 * 1000;
   const end = Math.floor(now.getTime() / step) * step;

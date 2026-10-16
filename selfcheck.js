@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -117,6 +117,16 @@ assert.equal(dayLabel('2026-10-15T02:00:00Z', 'America/Toronto'), 'Oct 14');
 // weekLabel: takes an already-local date key, so it is timezone-independent
 assert.equal(weekLabel('2026-10-15'), 'Oct 15 Thursday');
 assert.equal(weekLabel('2026-10-19'), 'Oct 19 Monday');
+
+// groupByDay: buckets by local date key across days, sorted ascending
+// (the shared `hours` fixture all lands on Oct 14 local; add an Oct 15 local hour)
+const grouped = groupByDay([{ time: '2026-10-15T14:00:00Z' }, hours[0], hours[1]], 'America/Toronto');
+assert.equal(grouped.length, 2);
+assert.equal(grouped[0].date, '2026-10-14');
+assert.equal(grouped[0].hours.length, 2);
+assert.equal(grouped[1].date, '2026-10-15');
+assert.equal(grouped[1].hours.length, 1);
+assert.equal(grouped[0].hours[0].time, '2026-10-14T14:00:00Z');
 
 // index.html and manifest carry the metadata that matters for sharing/install
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
