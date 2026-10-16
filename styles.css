@@ -193,6 +193,37 @@ input[type="range"] { accent-color: var(--blue); }
   #radarMap { height: 55vh; }
 }
 
+/* Hourly list */
+.hourly { display: flex; flex-direction: column; gap: .5rem; margin: 1rem 0; }
+.hour-head {
+  margin: .75rem 0 .1rem;
+  padding: .3rem .75rem;
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--purple);
+  border-bottom: 2px dotted rgba(106, 76, 147, .4);
+  border-left: 8px solid var(--blue);
+}
+.hour-head:first-child { margin-top: 0; }
+.hour-row {
+  padding: .7rem 1rem;
+  background: #fff;
+  border: 3px solid var(--purple);
+  border-radius: 14px;
+  box-shadow: 0 4px 0 rgba(106, 76, 147, .2);
+}
+.hour-row:nth-of-type(even) { background: #f6f2ff; }
+.hour-main { display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap; }
+.hour-time { font-weight: 800; min-width: 4.5rem; color: var(--purple); }
+.hour-emoji { font-size: 1.5rem; line-height: 1; }
+.hour-temp { font-family: 'Bungee', system-ui, sans-serif; font-size: 1.4rem; color: var(--purple); }
+.hour-cond { padding: .1rem .6rem; font-size: .85rem; font-weight: 800; background: var(--yellow); color: var(--on-bright); border-radius: 999px; }
+.hour-stats { display: flex; flex-wrap: wrap; margin: .45rem 0 0; font-size: .85rem; color: rgba(106, 76, 147, .85); }
+.hour-stats span + span::before { content: "·"; margin: 0 .5rem; }
+.hour-row.skeleton .sk-time { width: 4rem; height: .9rem; }
+.hour-row.skeleton .sk-line { width: 12rem; height: .8rem; }
+
 @media (prefers-reduced-motion: reduce) {
   button { transition: none; }
   button:hover, button:focus-visible { transform: none; }

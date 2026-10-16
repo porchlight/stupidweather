@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateWeek, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -218,22 +218,30 @@ function loadCachedForecast() {
   catch { return null; }
 }
 
-function hourlyCards(hours, tz) {
-  const cards = hours.slice(0, 12).map(h => {
-    const cond = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
-    return `<article class="card">`
-      + `<h3 class="card-time">${dayLabel(h.time, tz)}, ${clockTime(h.time, tz, false)}</h3>`
-      + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
-      + `<div class="card-temp">${fmtTemp(h.temp)}</div>`
-      + `<div class="card-cond">${cond}</div>`
-      + `<dl class="card-stats">`
-      + `<div><dt>POP</dt><dd>${Math.round(h.pop)}%</dd></div>`
-      + `<div><dt>Precip (mm)</dt><dd>${h.precip.toFixed(1)}</dd></div>`
-      + `<div><dt>Wind (km/h)</dt><dd>${fmtKmh(h.wind)}</dd></div>`
-      + `<div><dt>Gust (km/h)</dt><dd>${fmtKmh(h.gust)}</dd></div>`
-      + `</dl></article>`;
+function hourlyList(hours, loc) {
+  const groups = groupByDay(hours.slice(0, 12), loc.tz);
+  const now = new Date();
+  const blocks = groups.map(g => {
+    const head = `<h3 class="hour-head">${dayHeading(g.date, now, loc.tz)}</h3>`;
+    const rows = g.hours.map(h => {
+      const cond = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
+      return `<article class="hour-row">`
+        + `<div class="hour-main">`
+        + `<span class="hour-time">${clockTime(h.time, loc.tz, false)}</span>`
+        + `<span class="hour-emoji">${conditionEmoji(cond)}</span>`
+        + `<span class="hour-temp">${fmtTemp(h.temp)}</span>`
+        + `<span class="hour-cond">${cond}</span>`
+        + `</div>`
+        + `<p class="hour-stats">`
+        + `<span>POP ${Math.round(h.pop)}%</span>`
+        + `<span>${h.precip.toFixed(1)} mm</span>`
+        + `<span>wind ${fmtKmh(h.wind)} km/h</span>`
+        + `<span>gust ${fmtKmh(h.gust)} km/h</span>`
+        + `</p></article>`;
+    }).join('');
+    return head + rows;
   }).join('');
-  return `<div class="cards">${cards}</div>`;
+  return `<div class="hourly">${blocks}</div>`;
 }
 
 function weekCards(hours, tz) {
@@ -256,12 +264,12 @@ function weekCards(hours, tz) {
 }
 
 function showSkeleton() {
-  document.getElementById('tab-hourly').innerHTML = skeletonCards(12);
+  document.getElementById('tab-hourly').innerHTML = skeletonRows(8);
   document.getElementById('tab-week').innerHTML = skeletonCards(7);
 }
 
 export function renderForecast(hours, loc, opts = {}) {
-  document.getElementById('tab-hourly').innerHTML = hourlyCards(hours, loc.tz);
+  document.getElementById('tab-hourly').innerHTML = hourlyList(hours, loc);
   if (opts.hourlyOnly) return;
   document.getElementById('tab-week').innerHTML = weekCards(hours, loc.tz) + '<p class="note">POP = daily max, precip = daily total.</p>';
 }
