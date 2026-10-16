@@ -131,6 +131,17 @@ export function groupByDay(hours, tz) {
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export function dayHeading(key, now, tz) {
+  const todayKey = dateKey(now.toISOString(), tz);
+  const t = new Date(`${todayKey}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() + 1);
+  const tomorrowKey = t.toISOString().slice(0, 10);
+  if (key === todayKey) return 'Today';
+  if (key === tomorrowKey) return 'Tomorrow';
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })
+    .format(new Date(`${key}T00:00:00Z`));
+}
+
 export function radarTimes(now = new Date(), count = 30) {
   const step = 6 * 60 * 1000;
   const end = Math.floor(now.getTime() / step) * step;

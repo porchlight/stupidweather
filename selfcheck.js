@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -127,6 +127,17 @@ assert.equal(grouped[0].hours.length, 2);
 assert.equal(grouped[1].date, '2026-10-15');
 assert.equal(grouped[1].hours.length, 1);
 assert.equal(grouped[0].hours[0].time, '2026-10-14T14:00:00Z');
+
+// dayHeading: today/tomorrow by local date key, else weekday + short date
+const now = new Date('2026-10-15T14:00:00Z'); // Toronto 10:00 Oct 15 (Oct 15 2026 is a Thursday)
+assert.equal(dayHeading('2026-10-15', now, 'America/Toronto'), 'Today');
+assert.equal(dayHeading('2026-10-16', now, 'America/Toronto'), 'Tomorrow');
+assert.equal(dayHeading('2026-10-17', now, 'America/Toronto'), 'Sat, Oct 17');
+
+// dayHeading: DST-safe (US spring-forward is 2026-03-08)
+const dstStart = new Date('2026-03-08T05:00:00Z');
+assert.equal(dayHeading('2026-03-08', dstStart, 'America/Toronto'), 'Today');
+assert.equal(dayHeading('2026-03-09', dstStart, 'America/Toronto'), 'Tomorrow');
 
 // index.html and manifest carry the metadata that matters for sharing/install
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
