@@ -1,11 +1,16 @@
 {
   "name": "Stupid Weather",
-  "short_name": "StupidWx",
+  "short_name": "StupidWeather",
   "start_url": "./",
   "display": "standalone",
   "theme_color": "#6a4c93",
   "background_color": "#fbfbfe",
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
   ]
 }

@@ -25,6 +25,24 @@ body {
     radial-gradient(circle at 50% 100%, rgba(138, 201, 38, .22), transparent 45%);
 }
 
+body.landing {
+  background-color: var(--purple);
+  background-image: none;
+}
+
+body.landing header {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+body.landing nav,
+body.landing main {
+  display: none;
+}
+
 h1,
 h2,
 h3,
@@ -45,8 +63,11 @@ header {
   position: relative;
   text-align: center;
   padding: 1.25rem 1rem 1.5rem;
+  /* length endpoint for the landing-exit transition; auto does not interpolate */
+  min-height: 0;
   background: var(--purple);
   color: #fff;
+  transition: min-height .5s ease;
 }
 
 header::after {
@@ -75,10 +96,12 @@ header h1 {
   justify-content: center;
 }
 
+#locationForm[hidden] {
+  display: none;
+}
+
 #locationForm label {
-  align-self: center;
-  color: #fff;
-  font-weight: 800;
+  display: none;
 }
 
 #locationForm input {
@@ -97,6 +120,28 @@ header h1 {
   margin-top: .6rem;
   font-size: 1.2rem;
   font-weight: 800;
+}
+
+#changeLocation {
+  margin-top: .25rem;
+  padding: 0;
+  font: inherit;
+  font-size: .85rem;
+  color: rgba(255, 255, 255, .85);
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+#changeLocation:hover,
+#changeLocation:focus-visible {
+  color: #fff;
+  background: none;
+  box-shadow: none;
+  transform: none;
 }
 
 #lastUpdate {
@@ -156,12 +201,13 @@ button:active {
 
 /* Nav tabs */
 nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
   display: flex;
   gap: .6rem;
   flex-wrap: wrap;
   justify-content: center;
-  max-width: 960px;
-  margin-inline: auto;
   padding: 1rem 1rem 0;
 }
 
@@ -504,6 +550,10 @@ input[type="range"] {
     transition: none;
   }
 
+  header {
+    transition: none;
+  }
+
   button:hover,
   button:focus-visible {
     transform: none;
@@ -516,12 +566,30 @@ input[type="range"] {
 }
 
 /* Install button + modal */
+/* Install banner: full-width strip above the header */
 #installBtn {
-  position: absolute;
-  top: .75rem;
-  right: .75rem;
-  padding: .4rem .85rem;
-  font-size: .9rem;
+  display: block;
+  width: 100%;
+  padding: .6rem 1rem;
+  font-size: .95rem;
+  border: none;
+  border-radius: 0;
+  border-bottom: 3px solid var(--on-bright);
+  background: var(--yellow);
+  color: var(--on-bright);
+  box-shadow: none;
+}
+
+#installBtn:hover,
+#installBtn:focus-visible,
+#installBtn:active {
+  transform: none;
+  box-shadow: none;
+  filter: brightness(1.05);
+}
+
+#installBtn[hidden] {
+  display: none;
 }
 
 #installModal {

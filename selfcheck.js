@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -72,6 +72,31 @@ assert.equal(conditionEmoji('Flurries'), '🌨️');
 assert.equal(conditionEmoji('Blizzard'), '❄️');
 assert.equal(conditionEmoji('–'), '');
 assert.equal(conditionEmoji(undefined), '');
+
+// isNight: local hour <7 or >=19 is night (Toronto EDT = UTC-4 in October)
+assert.equal(isNight('2026-10-15T02:00:00Z', 'America/Toronto'), true);  // 22:00 local
+assert.equal(isNight('2026-10-15T14:00:00Z', 'America/Toronto'), false); // 10:00 local
+assert.equal(isNight('2026-10-15T10:00:00Z', 'America/Toronto'), true);  // 06:00 local
+assert.equal(isNight('2026-10-15T11:00:00Z', 'America/Toronto'), false); // 07:00 local
+assert.equal(isNight('2026-10-15T22:59:00Z', 'America/Toronto'), false); // 18:59 local
+assert.equal(isNight('2026-10-15T23:00:00Z', 'America/Toronto'), true);  // 19:00 local
+
+// conditionWord: night swaps clear-sky words only, snow/storm words stand
+assert.equal(conditionWord(10, 0, 15, 0, 2, true), 'Clear');
+assert.equal(conditionWord(10, 0, 15, 0, 2, false), 'Sunny');
+assert.equal(conditionWord(10, 0, 15, 0, 2), 'Sunny');
+assert.equal(conditionWord(40, 0, 15, 0, 2, true), 'Cloudy');
+assert.equal(conditionWord(40, 0, 15, 0, 2, false), 'Partly cloudy');
+assert.equal(conditionWord(90, 0, 15, 0, 2, true), 'Cloudy');
+assert.equal(conditionWord(10, 0, -5, 0.5, 3, true), 'Flurries');
+assert.equal(conditionWord(10, 0, -5, 1.5, 12, true), 'Blizzard');
+assert.equal(conditionWord(50, 30, 15, 0, 2, true), 'Thunderstorm');
+assert.equal(conditionWord(null, null, null, 0, null, true), '–');
+
+// conditionEmoji: one emoji per word; cloudy nights just use the cloud
+assert.equal(conditionEmoji('Clear'), '🌙');
+assert.equal(conditionEmoji('Cloudy'), '☁️');
+assert.equal(conditionEmoji('Sunny'), '☀️');
 
 // unit and label helpers: null renders as an en dash, 0 is a real value
 assert.equal(fmtTemp(12.6), '13°');

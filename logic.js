@@ -50,24 +50,35 @@ export function forecastTimes(now = new Date()) {
 
 const SEVERITY = ['Sunny', 'Partly cloudy', 'Cloudy', 'Flurries', 'Thunderstorm', 'Blizzard'];
 
+// ponytail: fixed 7-19 local window; NOAA sunrise/sunset math if polar/edge latitudes matter
+export function isNight(iso, tz) {
+  const h = Number(tzParts(iso, tz).hour);
+  return h < 7 || h >= 19;
+}
+
 const SNOW_TEMP = 0;        // °C at/below which precipitation falls as snow
 const BLIZZARD_PRECIP = 1;  // mm/h water equivalent
 const BLIZZARD_WIND = 11;   // m/s ≈ 40 km/h
 
-export function conditionWord(cloud, tstorm, temp, precip, wind) {
+export function conditionWord(cloud, tstorm, temp, precip, wind, night = false) {
+  let word = '–';
   if (temp != null && temp <= SNOW_TEMP && precip > 0) {
-    if (precip >= BLIZZARD_PRECIP && wind != null && wind >= BLIZZARD_WIND) return 'Blizzard';
-    return 'Flurries';
-  }
-  if (tstorm != null && tstorm >= 30) return 'Thunderstorm';
-  if (cloud == null) return '–';
-  if (cloud < 25) return 'Sunny';
-  if (cloud < 70) return 'Partly cloudy';
-  return 'Cloudy';
+    if (precip >= BLIZZARD_PRECIP && wind != null && wind >= BLIZZARD_WIND) word = 'Blizzard';
+    else word = 'Flurries';
+  } else if (tstorm != null && tstorm >= 30) word = 'Thunderstorm';
+  else if (cloud == null) word = '–';
+  else if (cloud < 25) word = 'Sunny';
+  else if (cloud < 70) word = 'Partly cloudy';
+  else word = 'Cloudy';
+  if (!night) return word;
+  if (word === 'Sunny') return 'Clear';
+  if (word === 'Partly cloudy') return 'Cloudy';
+  return word;
 }
 
 const CONDITION_EMOJI = {
   'Sunny': '☀️',
+  'Clear': '🌙',
   'Partly cloudy': '⛅',
   'Cloudy': '☁️',
   'Thunderstorm': '⛈️',

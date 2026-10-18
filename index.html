@@ -37,16 +37,17 @@
 </head>
 
 <body>
+  <button id="installBtn" type="button" aria-haspopup="dialog">Install Stupid Weather to your home screen</button>
   <header>
-    <button id="installBtn" type="button" aria-haspopup="dialog">Install app</button>
     <h1>Stupid Weather</h1>
     <form id="locationForm">
       <label for="locationInput">City</label>
-      <input id="locationInput" placeholder="e.g. London, Ontario" required>
+      <input id="locationInput" placeholder="e.g. London, Ontario" aria-label="City" required>
       <button type="submit">Search</button>
     </form>
     <div id="results" hidden></div>
     <div id="locationName"></div>
+    <button id="changeLocation" type="button" hidden>change location</button>
     <div id="lastUpdate"></div>
     <div id="status" role="status"></div>
   </header>

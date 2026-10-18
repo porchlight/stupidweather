@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateWeek, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -62,9 +62,25 @@ export async function refreshAll(loc) {
   }
 }
 
+function setLocationActive(active) {
+  document.getElementById('locationForm').hidden = active;
+  document.getElementById('changeLocation').hidden = !active;
+}
+
+function isInstalled() {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(display-mode: minimal-ui)').matches
+    || navigator.standalone === true;
+}
+
 function init() {
+  if (isInstalled()) document.getElementById('installBtn').hidden = true;
   document.querySelectorAll('nav button').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+  document.getElementById('changeLocation').addEventListener('click', () => {
+    setLocationActive(false);
+    document.getElementById('locationInput').focus();
   });
   document.getElementById('locationForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -86,7 +102,10 @@ function init() {
   installModal.addEventListener('click', e => { if (e.target === installModal) installModal.close(); });
   const restored = restoreLocation();
   if (restored) onLocationChange(restored);
-  else document.getElementById('status').textContent = 'Search a city to begin.';
+  else {
+    document.body.classList.add('landing');
+    document.getElementById('status').textContent = 'Search a city to begin.';
+  }
   switchTab('hourly');
 }
 
@@ -130,6 +149,8 @@ async function choosePlace(place) {
   status.textContent = 'Loading…';
   try {
     currentLocation = await selectPlace(place);
+    document.body.classList.remove('landing');
+    setLocationActive(true);
     localStorage.setItem('sw:location', JSON.stringify(currentLocation));
     document.getElementById('locationName').textContent = currentLocation.name;
     const box = document.getElementById('results');
@@ -150,6 +171,7 @@ function restoreLocation() {
   try {
     currentLocation = JSON.parse(saved);
     document.getElementById('locationName').textContent = currentLocation.name;
+    setLocationActive(true);
     return currentLocation;
   } catch { return null; }
 }
@@ -228,7 +250,8 @@ function hourlyList(hours, loc) {
   const blocks = groups.map(g => {
     const head = `<h3 class="hour-head">${dayHeading(g.date, now, loc.tz)}</h3>`;
     const rows = g.hours.map(h => {
-      const cond = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
+      const night = isNight(h.time, loc.tz);
+      const cond = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind, night);
       return `<article class="hour-row">`
         + `<div class="hour-main">`
         + `<span class="hour-time">${clockTime(h.time, loc.tz, false)}</span>`
