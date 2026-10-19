@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateWeek, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -252,11 +252,15 @@ function hourlyList(hours, loc) {
     const rows = g.hours.map(h => {
       const night = isNight(h.time, loc.tz);
       const cond = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind, night);
+      const feels = windChill(h.temp, h.wind);
+      const feelsHtml = feels != null && Math.round(feels) !== Math.round(h.temp)
+        ? `<span class="hour-feels">Feels like: ${fmtTemp(feels)}</span>` : '';
       return `<article class="hour-row">`
         + `<div class="hour-main">`
         + `<span class="hour-time">${clockTime(h.time, loc.tz, false)}</span>`
         + `<span class="hour-emoji">${conditionEmoji(cond)}</span>`
         + `<span class="hour-temp">${fmtTemp(h.temp)}</span>`
+        + feelsHtml
         + `<span class="hour-cond">${cond}</span>`
         + `</div>`
         + `<p class="hour-stats">`
@@ -275,10 +279,13 @@ function weekCards(hours, tz) {
   const days = aggregateWeek(hours, tz);
   const cards = days.map(d => {
     const cond = d.cond ?? '–';
+    const feelsHtml = d.feels != null && Math.round(d.feels) !== Math.round(d.lo)
+      ? `<div class="card-feels">Feels like: ${fmtTemp(d.feels)}</div>` : '';
     return `<article class="card">`
       + `<h3 class="card-time">${weekLabel(d.date)}</h3>`
       + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
       + `<div class="card-temp">${fmtHiLo(d.hi, d.lo)}</div>`
+      + feelsHtml
       + `<div class="card-cond">${cond}</div>`
       + `<dl class="card-stats">`
       + `<div><dt>POP</dt><dd>${Math.round(d.pop)}%</dd></div>`

@@ -290,6 +290,13 @@ main {
   color: var(--purple);
 }
 
+.card-feels {
+  margin: 0 0 .5rem;
+  font-size: .95rem;
+  font-weight: 800;
+  color: rgba(106, 76, 147, .75);
+}
+
 .card-cond {
   display: inline-block;
   margin: 0 0 .7rem;
@@ -511,6 +518,11 @@ input[type="range"] {
   font-family: 'Bungee', system-ui, sans-serif;
   font-size: 1.4rem;
   color: var(--purple);
+}
+
+.hour-feels {
+  font-size: .8rem;
+  color: rgba(106, 76, 147, .75);
 }
 
 .hour-cond {

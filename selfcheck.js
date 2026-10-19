@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -26,8 +26,8 @@ const hours = [
 // aggregateWeek: group by local date, pop=max, precip=sum
 const weekHours = [...hours, { time: '2026-10-15T14:00:00Z', pop: 30, precip: 4, temp: 15, wind: 8, gust: null, cloud: 45, tstorm: 40 }];
 const week = aggregateWeek(weekHours, 'America/Toronto');
-assert.deepEqual(week[0], { date: '2026-10-14', pop: 60, precip: 3, hi: 18.2, lo: 6.1, wind: 5, gust: 11, cond: 'Cloudy' });
-assert.deepEqual(week[1], { date: '2026-10-15', pop: 30, precip: 4, hi: 15, lo: 15, wind: 8, gust: null, cond: 'Thunderstorm' });
+assert.deepEqual(week[0], { date: '2026-10-14', pop: 60, precip: 3, hi: 18.2, lo: 6.1, wind: 5, gust: 11, cond: 'Cloudy', feels: null });
+assert.deepEqual(week[1], { date: '2026-10-15', pop: 30, precip: 4, hi: 15, lo: 15, wind: 8, gust: null, cond: 'Thunderstorm', feels: null });
 
 // winter: sub-zero hours aggregate to snow; January dates/labels hold
 const winter = aggregateWeek([
@@ -37,8 +37,20 @@ const winter = aggregateWeek([
 assert.equal(winter[0].cond, 'Blizzard');
 assert.equal(winter[0].hi, -8);
 assert.equal(winter[0].lo, -14);
+assert.equal(Math.round(winter[0].feels), -20); // coldest wind chill of the day, colder than the -14 low
 assert.equal(dateKey('2026-01-15T23:00:00Z', 'America/Toronto'), '2026-01-15');
 assert.equal(weekLabel('2026-01-15'), 'Jan 15 Thursday');
+
+// windChill: 2001 JAG/TI formula, EC reference points (-15°C/20km/h = -24, -20°C/30km/h = -33)
+assert.equal(Math.round(windChill(-15, 20 / 3.6)), -24);
+assert.equal(Math.round(windChill(-20, 30 / 3.6)), -33);
+// undefined outside its domain: warm, calm, or missing inputs
+assert.equal(windChill(15, 10), null);
+assert.notEqual(windChill(10, 10), null);      // 10°C is still in domain
+assert.equal(windChill(-5, 4.8 / 3.6), null);  // exactly 4.8 km/h is not above the threshold
+assert.equal(windChill(-5, 1), null);           // 3.6 km/h calm
+assert.equal(windChill(null, 5), null);
+assert.equal(windChill(-5, null), null);
 
 // conditionWord: thresholds at their boundaries, thunderstorm wins
 assert.equal(conditionWord(92, 0), 'Cloudy');

@@ -99,6 +99,15 @@ export function fmtHiLo(hi, lo) {
   return `${Math.round(hi)}°/${Math.round(lo)}°`;
 }
 
+// 2001 JAG/TI wind chill (EC/NWS): defined for T <= 10°C and wind > 4.8 km/h, null otherwise
+export function windChill(temp, windMs) {
+  if (temp == null || windMs == null || temp > 10) return null;
+  const v = windMs * 3.6;
+  if (v <= 4.8) return null;
+  const v016 = Math.pow(v, 0.16);
+  return 13.12 + 0.6215 * temp - 11.37 * v016 + 0.3965 * temp * v016;
+}
+
 function worse(a, b) {
   if (a == null) return b;
   if (b == null) return a;
@@ -106,7 +115,7 @@ function worse(a, b) {
 }
 
 function emptyStat() {
-  return { pop: 0, precip: 0, hi: null, lo: null, wind: null, gust: null, cond: null };
+  return { pop: 0, precip: 0, hi: null, lo: null, wind: null, gust: null, cond: null, feels: null };
 }
 
 function addHour(stat, h) {
@@ -118,6 +127,8 @@ function addHour(stat, h) {
   }
   if (h.wind != null) stat.wind = stat.wind == null ? h.wind : Math.max(stat.wind, h.wind);
   if (h.gust != null) stat.gust = stat.gust == null ? h.gust : Math.max(stat.gust, h.gust);
+  const wc = windChill(h.temp, h.wind);
+  if (wc != null && (stat.feels == null || wc < stat.feels)) stat.feels = wc;
   const c = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
   if (c !== '–') stat.cond = worse(stat.cond, c);
 }
