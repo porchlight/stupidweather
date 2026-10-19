@@ -122,13 +122,14 @@ function addHour(stat, h) {
   stat.pop = Math.max(stat.pop, h.pop ?? 0);
   stat.precip += h.precip ?? 0;
   if (h.temp != null) {
-    stat.hi = stat.hi == null ? h.temp : Math.max(stat.hi, h.temp);
+    if (stat.hi == null || h.temp > stat.hi) {
+      stat.hi = h.temp;
+      stat.feels = windChill(h.temp, h.wind);
+    }
     stat.lo = stat.lo == null ? h.temp : Math.min(stat.lo, h.temp);
   }
   if (h.wind != null) stat.wind = stat.wind == null ? h.wind : Math.max(stat.wind, h.wind);
   if (h.gust != null) stat.gust = stat.gust == null ? h.gust : Math.max(stat.gust, h.gust);
-  const wc = windChill(h.temp, h.wind);
-  if (wc != null && (stat.feels == null || wc < stat.feels)) stat.feels = wc;
   const c = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
   if (c !== '–') stat.cond = worse(stat.cond, c);
 }

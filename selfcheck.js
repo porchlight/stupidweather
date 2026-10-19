@@ -37,7 +37,7 @@ const winter = aggregateWeek([
 assert.equal(winter[0].cond, 'Blizzard');
 assert.equal(winter[0].hi, -8);
 assert.equal(winter[0].lo, -14);
-assert.equal(Math.round(winter[0].feels), -20); // coldest wind chill of the day, colder than the -14 low
+assert.equal(Math.round(winter[0].feels), -18); // wind chill at the day's high (-8°C, 12 m/s)
 assert.equal(dateKey('2026-01-15T23:00:00Z', 'America/Toronto'), '2026-01-15');
 assert.equal(weekLabel('2026-01-15'), 'Jan 15 Thursday');
 

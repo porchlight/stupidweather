@@ -279,7 +279,7 @@ function weekCards(hours, tz) {
   const days = aggregateWeek(hours, tz);
   const cards = days.map(d => {
     const cond = d.cond ?? '–';
-    const feelsHtml = d.feels != null && Math.round(d.feels) !== Math.round(d.lo)
+    const feelsHtml = d.feels != null && Math.round(d.feels) !== Math.round(d.hi)
       ? `<div class="card-feels">Feels like: ${fmtTemp(d.feels)}</div>` : '';
     return `<article class="card">`
       + `<h3 class="card-time">${weekLabel(d.date)}</h3>`
