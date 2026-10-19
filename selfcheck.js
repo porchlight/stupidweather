@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, layerIcon, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -277,5 +277,14 @@ const cp2 = citypageToForecast({
 }, 'America/Toronto', new Date('2026-10-18T15:00:00Z'));
 assert.deepEqual(cp2.days, [{ date: '2026-10-18', pop: null, precip: null, hi: 14, lo: 3,
   wind: null, gust: null, cond: 'Sunny', feels: null }]);
+
+// layerIcon: cumulative clothing stack by temperature (boundary: 20 = two icons, 10 = three, 0 = three)
+assert.equal(layerIcon(21), '👕');
+assert.equal(layerIcon(20), '👕🧶');
+assert.equal(layerIcon(11), '👕🧶');
+assert.equal(layerIcon(10), '👕🧶🧥');
+assert.equal(layerIcon(0), '👕🧶🧥');
+assert.equal(layerIcon(-1), '👕🧶🧥🥶');
+assert.equal(layerIcon(null), '');
 
 console.log('selfcheck OK');

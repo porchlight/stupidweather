@@ -111,6 +111,14 @@ export function fmtHiLo(hi, lo) {
   return `${Math.round(hi)}°/${Math.round(lo)}°`;
 }
 
+export function layerIcon(temp) {
+  if (temp == null) return '';
+  if (temp > 20) return '👕';
+  if (temp > 10) return '👕🧶';
+  if (temp >= 0) return '👕🧶🧥';
+  return '👕🧶🧥🥶';
+}
+
 // 2001 JAG/TI wind chill (EC/NWS): defined for T <= 10°C and wind > 4.8 km/h, null otherwise
 export function windChill(temp, windMs) {
   if (temp == null || windMs == null || temp > 10) return null;
