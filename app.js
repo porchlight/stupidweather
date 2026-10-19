@@ -401,7 +401,7 @@ export async function refreshRadar(loc, opts = {}) {
   radarBounds = bounds;
   const mapEl = document.getElementById('radarMap');
   mapEl.classList.add('loading');
-  const times = radarTimes(new Date(), 30, 9);
+  const times = radarTimes(new Date(), 10, 9);
   const frames = await pool(times, 6, async (time) => {
     const future = Date.parse(time) > Date.now();
     const url = radarFrameUrl(time, bounds, future ? RADAR_FORECAST_LAYER : RADAR_LAYER);
