@@ -348,6 +348,9 @@ export function renderForecast(hours, loc, opts = {}) {
 }
 
 const RADAR_LAYER = 'RADAR_1KM_RRAI';
+// EC rejects multi-layer requests; dBZ nowcast covers rain and snow, so future
+// frames come from the extrapolation layer and past frames from the composite
+const RADAR_FORECAST_LAYER = 'Radar_1km_dBZ-Extrapolation';
 let radarMap = null;
 let radarOverlay = null;
 let radarMarker = null;
@@ -358,10 +361,10 @@ let radarTimer = null;
 let radarSeq = 0;
 let radarMoveTimer = null;
 
-function radarFrameUrl(time, bounds) {
+function radarFrameUrl(time, bounds, layer = RADAR_LAYER) {
   const p = new URLSearchParams({
     SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap',
-    LAYERS: RADAR_LAYER, CRS: 'EPSG:4326',
+    LAYERS: layer, CRS: 'EPSG:4326',
     BBOX: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
     WIDTH: '1024', HEIGHT: '1024', FORMAT: 'image/png', TRANSPARENT: 'TRUE',
     TIME: time.replace(/\.\d+Z$/, 'Z'), STYLES: ''
@@ -398,24 +401,31 @@ export async function refreshRadar(loc, opts = {}) {
   radarBounds = bounds;
   const mapEl = document.getElementById('radarMap');
   mapEl.classList.add('loading');
-  const times = radarTimes(new Date());
+  const times = radarTimes(new Date(), 30, 9);
   const frames = await pool(times, 6, async (time) => {
-    const url = radarFrameUrl(time, bounds);
+    const future = Date.parse(time) > Date.now();
+    const url = radarFrameUrl(time, bounds, future ? RADAR_FORECAST_LAYER : RADAR_LAYER);
     return { time, url };
   });
   if (seq !== refreshSeq || mine !== radarSeq) { mapEl.classList.remove('loading'); return; }
-  await Promise.all(frames.map(f => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = f.url; })));
+  const loaded = await Promise.all(frames.map(f => new Promise(r => {
+    const i = new Image();
+    i.onload = () => r(f);
+    i.onerror = () => r(null);
+    i.src = f.url;
+  })));
   if (seq !== refreshSeq || mine !== radarSeq) { mapEl.classList.remove('loading'); return; }
-  radarFrames = frames;
+  const kept = loaded.filter(Boolean);
+  radarFrames = kept.length ? kept : frames;
   const slider = document.getElementById('frameSlider');
-  slider.max = String(frames.length - 1);
+  slider.max = String(radarFrames.length - 1);
   slider.value = '0';
-  showFrame(frames.length - 1);
+  showFrame(radarFrames.length - 1);
   mapEl.classList.remove('loading');
   playRadar();
 }
 
-// ponytail: refetches all ~30 full-map frames per pan (heavy on the live WMS); move to a viewport-driven L.tileLayer.wms if that bites
+// ponytail: refetches all ~39 full-map frames per pan (heavy on the live WMS); move to a viewport-driven L.tileLayer.wms if that bites
 function onRadarMove() {
   clearTimeout(radarMoveTimer);
   radarMoveTimer = setTimeout(() => {

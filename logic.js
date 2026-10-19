@@ -238,11 +238,12 @@ export function dayHeading(key, now, tz) {
     .format(new Date(`${key}T00:00:00Z`));
 }
 
-export function radarTimes(now = new Date(), count = 30) {
+export function radarTimes(now = new Date(), count = 30, future = 0) {
   const step = 6 * 60 * 1000;
   const end = Math.floor(now.getTime() / step) * step;
   const out = [];
   for (let i = count - 1; i >= 0; i--) out.push(new Date(end - i * step).toISOString());
+  for (let i = 1; i <= future; i++) out.push(new Date(end + i * step).toISOString());
   return out;
 }
 

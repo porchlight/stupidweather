@@ -133,9 +133,11 @@ assert.deepEqual(out, [10, 20, 30, 40]);
 const idx = await pool([10, 20, 30], 2, async (n, i) => i);
 assert.deepEqual(idx, [0, 1, 2]);
 
-// radarTimes: 6-min steps ending at the floor of now, oldest->newest
+// radarTimes: 6-min steps ending at the floor of now, oldest->newest; optional future frames
 const rt = radarTimes(new Date('2026-10-14T17:59:00Z'), 3);
 assert.deepEqual(rt, ['2026-10-14T17:42:00.000Z', '2026-10-14T17:48:00.000Z', '2026-10-14T17:54:00.000Z']);
+const rtf = radarTimes(new Date('2026-10-14T17:59:00Z'), 2, 2);
+assert.deepEqual(rtf, ['2026-10-14T17:48:00.000Z', '2026-10-14T17:54:00.000Z', '2026-10-14T18:00:00.000Z', '2026-10-14T18:06:00.000Z']);
 
 // radarDelay: slider max = fastest (smallest delay), slider min = slowest
 assert.equal(radarDelay('1200', '200', '1200'), 200);
