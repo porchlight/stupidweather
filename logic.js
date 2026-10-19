@@ -76,6 +76,18 @@ export function conditionWord(cloud, tstorm, temp, precip, wind, night = false) 
   return word;
 }
 
+export function ecConditionWord(text) {
+  const s = (text || '').toLowerCase();
+  if (!s) return null;
+  if (s.includes('thunder')) return 'Thunderstorm';
+  if (s.includes('blizzard')) return 'Blizzard';
+  if (s.includes('flurr') || s.includes('snow')) return 'Flurries';
+  if (s.includes('sunny')) return 'Sunny';
+  if (s.includes('clear')) return 'Clear';
+  if (s.includes('few') || s.includes('partly')) return 'Partly cloudy';
+  return 'Cloudy';
+}
+
 const CONDITION_EMOJI = {
   'Sunny': '☀️',
   'Clear': '🌙',
@@ -142,6 +154,67 @@ export function aggregateWeek(hours, tz) {
     addHour(map.get(key), h);
   }
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export function citypageToForecast(props, tz, now = new Date()) {
+  const hours = (props.hourlyForecastGroup?.hourlyForecasts || []).map(h => ({
+    time: h.timestamp,
+    pop: h.lop?.value?.en ?? null,
+    precip: null,
+    temp: h.temperature?.value?.en ?? null,
+    wind: h.wind?.speed?.value?.en != null ? h.wind.speed.value.en / 3.6 : null,
+    gust: h.wind?.gust?.value?.en != null ? h.wind.gust.value.en / 3.6 : null,
+    cloud: null,
+    tstorm: null,
+    cond: ecConditionWord(h.condition?.en)
+  }));
+  const days = citypageDays(props.forecastGroup?.forecasts || [], tz, now);
+  for (const h of hours) {
+    const d = days.find(x => x.date === dateKey(h.time, tz));
+    if (d && h.pop != null) d.pop = Math.max(d.pop ?? 0, h.pop);
+  }
+  return { hours, days };
+}
+
+// ponytail: days pair positionally (day advances, night fills), not by weekday name;
+// feels uses the day's max wind instead of the high-temp hour's wind — grid data
+// replaces this within seconds, so the degree of precision isn't worth parsing
+function citypageDays(periods, tz, now) {
+  const out = new Map();
+  let cur = dateKey(now.toISOString(), tz);
+  const day = k => {
+    if (!out.has(k)) out.set(k, { date: k, pop: null, precip: null, hi: null, lo: null, wind: null, gust: null, cond: null, feels: null });
+    return out.get(k);
+  };
+  const nextKey = k => {
+    const t = new Date(`${k}T00:00:00Z`);
+    t.setUTCDate(t.getUTCDate() + 1);
+    return t.toISOString().slice(0, 10);
+  };
+  for (const p of periods) {
+    const name = p.period?.textForecastName?.en || '';
+    const night = /night/i.test(name);
+    if (!night) {
+      const d = day(cur);
+      if (d.hi != null || d.lo != null) cur = nextKey(cur);
+    }
+    const d = day(cur);
+    const temps = p.temperatures?.temperature || [];
+    const hi = temps.find(t => t.class?.en === 'high')?.value?.en;
+    const lo = temps.find(t => t.class?.en === 'low')?.value?.en;
+    if (night) { if (lo != null) d.lo = lo; }
+    else if (hi != null) d.hi = hi;
+    for (const w of p.winds?.periods || []) {
+      const sp = w.speed?.value?.en;
+      const gu = w.gust?.value?.en;
+      if (sp != null) d.wind = d.wind == null ? sp / 3.6 : Math.max(d.wind, sp / 3.6);
+      if (gu != null) d.gust = d.gust == null ? gu / 3.6 : Math.max(d.gust, gu / 3.6);
+    }
+    const c = ecConditionWord(p.abbreviatedForecast?.textSummary?.en);
+    if (c) d.cond = worse(d.cond, c);
+  }
+  for (const d of out.values()) d.feels = windChill(d.hi, d.wind);
+  return [...out.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export function groupByDay(hours, tz) {

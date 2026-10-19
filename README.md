@@ -36,6 +36,7 @@ ES module and the service worker needs an HTTP origin.
 | Data | Source |
 | --- | --- |
 | Forecast, wind, cloud, radar | [MSC GeoMet](https://eccc-msc.github.io/open-data/msc-geomet/readme_en/) WMS (`geo.weather.gc.ca`) |
+| Instant first paint (city locations) | MSC GeoMet-OGC-API `citypageweather-realtime` (`api.weather.gc.ca`) |
 | City search | [OpenStreetMap Nominatim](https://nominatim.org/) |
 | Timezone lookup | [timeapi.io](https://timeapi.io/) |
 | Basemap tiles | OpenStreetMap |

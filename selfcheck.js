@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -200,5 +200,80 @@ assert.equal((skeletonCards(3).match(/class="sk /g) || []).length, 24);
 assert.ok(skeletonRows(3).startsWith('<div class="hourly">'));
 assert.equal((skeletonRows(4).match(/hour-row/g) || []).length, 4);
 assert.ok(skeletonRows(2).includes('aria-hidden="true"'));
+
+// ecConditionWord: EC text summaries map onto the app's condition vocabulary
+assert.equal(ecConditionWord('Sunny'), 'Sunny');
+assert.equal(ecConditionWord('Mainly sunny'), 'Sunny');
+assert.equal(ecConditionWord('Clear'), 'Clear');
+assert.equal(ecConditionWord('A few clouds'), 'Partly cloudy');
+assert.equal(ecConditionWord('Partly cloudy'), 'Partly cloudy');
+assert.equal(ecConditionWord('Cloudy'), 'Cloudy');
+assert.equal(ecConditionWord('Chance of showers'), 'Cloudy');
+assert.equal(ecConditionWord('Thunderstorms'), 'Thunderstorm');
+assert.equal(ecConditionWord('Flurries'), 'Flurries');
+assert.equal(ecConditionWord('Blowing snow'), 'Flurries');
+assert.equal(ecConditionWord('Blizzard'), 'Blizzard');
+assert.equal(ecConditionWord(''), null);
+assert.equal(ecConditionWord(null), null);
+
+// citypageToForecast: field paths mirror the live collection (probed 2026-10-18)
+const cpProps = {
+  hourlyForecastGroup: { hourlyForecasts: [
+    { timestamp: '2026-10-18T21:00:00Z', condition: { en: 'Clear' }, temperature: { value: { en: 11 } },
+      lop: { value: { en: 0 } }, wind: { speed: { value: { en: 20 } }, gust: { value: { en: 40 } } } },
+    { timestamp: '2026-10-19T03:00:00Z', condition: { en: 'Cloudy' }, temperature: { value: { en: 7 } },
+      lop: { value: { en: 60 } }, wind: { speed: { value: { en: 15 } } } },
+    { timestamp: '2026-10-19T15:00:00Z', condition: { en: 'Sunny' }, temperature: { value: { en: 17 } },
+      lop: { value: { en: 20 } }, wind: { speed: { value: { en: 10 } }, gust: { value: { en: 0 } } } }
+  ]},
+  forecastGroup: { forecasts: [
+    { period: { textForecastName: { en: 'Tonight' } },
+      temperatures: { temperature: [{ class: { en: 'low' }, value: { en: 5 } }] },
+      winds: { periods: [{ speed: { value: { en: 20 } }, gust: { value: { en: 40 } } }] },
+      abbreviatedForecast: { textSummary: { en: 'Clear' } } },
+    { period: { textForecastName: { en: 'Monday' } },
+      temperatures: { temperature: [{ class: { en: 'high' }, value: { en: 19 } }] },
+      winds: { periods: [{ speed: { value: { en: 15 } }, gust: { value: { en: 0 } } }] },
+      abbreviatedForecast: { textSummary: { en: 'Sunny' } } },
+    { period: { textForecastName: { en: 'Monday night' } },
+      temperatures: { temperature: [{ class: { en: 'low' }, value: { en: 5 } }] },
+      winds: { periods: [{ speed: { value: { en: 5 } }, gust: { value: { en: 0 } } }] },
+      abbreviatedForecast: { textSummary: { en: 'A few clouds' } } },
+    { period: { textForecastName: { en: 'Tuesday' } },
+      temperatures: { temperature: [{ class: { en: 'high' }, value: { en: 17 } }] },
+      abbreviatedForecast: { textSummary: { en: 'Sunny' } } }
+  ]}
+};
+const cp = citypageToForecast(cpProps, 'America/Toronto', new Date('2026-10-18T20:00:00Z')); // Sun 16:00 local
+
+assert.equal(cp.hours.length, 3);
+assert.deepEqual(cp.hours[0], { time: '2026-10-18T21:00:00Z', pop: 0, precip: null, temp: 11,
+  wind: 20 / 3.6, gust: 40 / 3.6, cloud: null, tstorm: null, cond: 'Clear' });
+assert.equal(cp.hours[1].gust, null);   // gust key absent from EC hourly data
+assert.equal(cp.hours[1].cond, 'Cloudy');
+assert.equal(cp.hours[2].gust, 0);      // gust 0 is a value, not missing data
+
+// Tonight -> today's low; day periods advance the cursor; night pairs with its day
+assert.equal(cp.days.length, 3);
+assert.deepEqual(cp.days[0], { date: '2026-10-18', pop: 60, precip: null, hi: null, lo: 5,
+  wind: 20 / 3.6, gust: 40 / 3.6, cond: 'Clear', feels: null });
+assert.deepEqual(cp.days[1], { date: '2026-10-19', pop: 20, precip: null, hi: 19, lo: 5,
+  wind: 15 / 3.6, gust: 0, cond: 'Partly cloudy', feels: null });
+assert.deepEqual(cp.days[2], { date: '2026-10-20', pop: null, precip: null, hi: 17, lo: null,
+  wind: null, gust: null, cond: 'Sunny', feels: null });
+
+// daytime issue: a leading day period lands on today without advancing
+const cp2 = citypageToForecast({
+  forecastGroup: { forecasts: [
+    { period: { textForecastName: { en: 'Sunday' } },
+      temperatures: { temperature: [{ class: { en: 'high' }, value: { en: 14 } }] },
+      abbreviatedForecast: { textSummary: { en: 'Sunny' } } },
+    { period: { textForecastName: { en: 'Sunday night' } },
+      temperatures: { temperature: [{ class: { en: 'low' }, value: { en: 3 } }] },
+      abbreviatedForecast: { textSummary: { en: 'Clear' } } }
+  ]}
+}, 'America/Toronto', new Date('2026-10-18T15:00:00Z'));
+assert.deepEqual(cp2.days, [{ date: '2026-10-18', pop: null, precip: null, hi: 14, lo: 3,
+  wind: null, gust: null, cond: 'Sunny', feels: null }]);
 
 console.log('selfcheck OK');
