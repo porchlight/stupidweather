@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateWeek, aggregatePeriods, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows, citypageToForecast } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, aggregatePeriods, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -7,6 +7,7 @@ export function switchTab(name) {
   });
   const section = document.getElementById('tab-' + name);
   if (section) section.hidden = false;
+  window.scrollTo(0, 0);
   if (name === 'radar') window.dispatchEvent(new Event('radar-shown'));
 }
 
@@ -27,48 +28,36 @@ let onLocationChange = async (loc) => {
 export async function refreshAll(loc) {
   const status = document.getElementById('status');
   if (!loc) { status.textContent = 'Search a city to begin.'; return; }
-  status.textContent = '';
   const seq = ++refreshSeq;
   const key = loc.lat + ',' + loc.lon;
   const cached = loadCachedForecast(key);
   let hours = cached ? cached.hours : null;
-  let cityDays = null;
-  if (!hours) showSkeleton();
+  const stale = !cached || Date.now() - cached.ts > REFRESH_MS;
+  if (stale) {
+    showSkeleton();
+    status.textContent = 'Loading…';
+  }
   try {
     let offline = false;
-    let cityPainted = false;
-    let gridPainted = false;
-    const paint = (hrs) => {
-      if (seq !== refreshSeq) return;
-      if (cityPainted && hrs.length < 12) return;
-      gridPainted = true;
-      renderForecast(hrs, loc, { hourlyOnly: true });
-    };
-    const grid = (!cached || Date.now() - cached.ts > REFRESH_MS)
-      ? fetchForecast(loc, paint).then(h => ({ hours: h }), e => ({ err: e }))
-      : Promise.resolve({ hours });
-    if (!hours) {
-      try {
-        const cp = await fetchCitypage(loc);
+    if (stale) {
+      let lastPaint = 0;
+      const res = await fetchForecast(loc, loaded => {
         if (seq !== refreshSeq) return;
-        if (!gridPainted) {
-          cityPainted = true;
-          hours = cp.hours;
-          cityDays = cp.days;
-          renderForecast(hours, loc, { days: cityDays });
-        }
-      } catch { /* no city page for this location */ }
+        const now = Date.now();
+        if (now - lastPaint < 400) return;
+        lastPaint = now;
+        renderHourly(loaded, loc);
+      }).then(h => ({ hours: h }), e => ({ err: e }));
+      if (seq !== refreshSeq) return;
+      if (res.err) {
+        if (!hours) throw res.err;
+        offline = true;
+      } else {
+        hours = res.hours;
+      }
     }
-    const res = await grid;
-    if (seq !== refreshSeq) return;
-    if (res.err) {
-      if (!hours) throw res.err;
-      offline = true;
-    } else {
-      hours = res.hours;
-      cityDays = null;
-    }
-    renderForecast(hours, loc, cityDays ? { days: cityDays } : {});
+    status.textContent = '';
+    renderForecast(hours, loc);
     document.getElementById('lastUpdate').textContent = `Updated ${clockTime(new Date().toISOString(), loc.tz)} local${offline ? ' (offline)' : ''}`;
     await refreshRadar(loc);
   } catch (err) {
@@ -130,7 +119,15 @@ function init() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    reg.update().catch(() => {});
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      location.reload();
+    });
+  }).catch(() => {});
 }
 
 export async function searchPlaces(query) {
@@ -197,7 +194,6 @@ function restoreLocation() {
 }
 
 const WMS = 'https://geo.weather.gc.ca/geomet';
-const CITYPAGE = 'https://api.weather.gc.ca/collections/citypageweather-realtime/items';
 const LAYER_POP = 'GDPS-WEonG_15km_Precip-Prob';
 const LAYER_PCP = 'GDPS_15km_Precip-Accum1h';
 const LAYER_TEMP = 'GDPS_15km_AirTemp_2m';
@@ -223,6 +219,11 @@ async function pointValue(layer, lat, lon, time) {
   return f && typeof f.properties.value === 'number' ? f.properties.value : null;
 }
 
+function loadedPrefix(hours) {
+  const hole = hours.findIndex(h => !h);
+  return hours.slice(0, hole === -1 ? hours.length : hole);
+}
+
 export async function fetchForecast(loc, onProgress) {
   const times = forecastTimes(new Date());
   const hours = new Array(times.length);
@@ -240,25 +241,11 @@ export async function fetchForecast(loc, onProgress) {
     if (pop != null || precip != null || temp != null || wind != null
         || gust != null || cloud != null || tstorm != null) anyData = true;
     hours[i] = { time, pop: pop ?? 0, precip: precip ?? 0, temp, wind, gust, cloud, tstorm };
-    if (onProgress) onProgress(hours.filter(Boolean));
+    if (onProgress) onProgress(loadedPrefix(hours));
   });
   if (!anyData) throw new Error('Forecast data unavailable');
   writeForecast(hours, loc);
   return hours;
-}
-
-async function fetchCitypage(loc) {
-  const d = 0.4;
-  const p = new URLSearchParams({
-    bbox: `${loc.lon - d},${loc.lat - d},${loc.lon + d},${loc.lat + d}`,
-    limit: '1', f: 'json'
-  });
-  const res = await fetch(`${CITYPAGE}?${p}`, { signal: AbortSignal.timeout(5000) });
-  if (!res.ok) throw new Error('city page ' + res.status);
-  const json = await res.json();
-  const f = json.features && json.features[0];
-  if (!f) throw new Error('no city page nearby');
-  return citypageToForecast(f.properties, loc.tz);
 }
 
 function writeForecast(hours, loc) {
@@ -368,14 +355,13 @@ function showSkeleton() {
   document.getElementById('tab-week').innerHTML = skeletonCards(8);
 }
 
-export function renderForecast(hours, loc, opts = {}) {
+function renderHourly(hours, loc) {
   document.getElementById('tab-hourly').innerHTML = hourlyList(hours, loc);
-  if (opts.hourlyOnly) {
-    const week = document.getElementById('tab-week');
-    if (!week.querySelector('.card')) week.innerHTML = skeletonCards(8);
-    return;
-  }
-  const days = opts.days || aggregateWeek(hours, loc.tz);
+}
+
+export function renderForecast(hours, loc) {
+  renderHourly(hours, loc);
+  const days = aggregateWeek(hours, loc.tz);
   const periods = aggregatePeriods(hours, loc.tz);
   document.getElementById('tab-week').innerHTML = weekCards(days, periods) + '<p class="note">POP = daily max, precip = daily total.</p>';
 }
