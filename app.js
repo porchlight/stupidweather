@@ -365,12 +365,16 @@ function weekCards(days, periods) {
 
 function showSkeleton() {
   document.getElementById('tab-hourly').innerHTML = skeletonRows(12);
-  document.getElementById('tab-week').innerHTML = skeletonCards(7);
+  document.getElementById('tab-week').innerHTML = skeletonCards(8);
 }
 
 export function renderForecast(hours, loc, opts = {}) {
   document.getElementById('tab-hourly').innerHTML = hourlyList(hours, loc);
-  if (opts.hourlyOnly) return;
+  if (opts.hourlyOnly) {
+    const week = document.getElementById('tab-week');
+    if (!week.querySelector('.card')) week.innerHTML = skeletonCards(8);
+    return;
+  }
   const days = opts.days || aggregateWeek(hours, loc.tz);
   const periods = aggregatePeriods(hours, loc.tz);
   document.getElementById('tab-week').innerHTML = weekCards(days, periods) + '<p class="note">POP = daily max, precip = daily total.</p>';
