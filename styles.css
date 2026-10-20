@@ -290,6 +290,11 @@ main {
   color: var(--purple);
 }
 
+.card-layers {
+  margin: 0 0 .5rem;
+  font-size: 1.3rem;
+}
+
 .card-feels {
   margin: 0 0 .5rem;
   font-size: .95rem;

@@ -330,7 +330,7 @@ function weekCards(days, periods) {
       ? `<details class="card-details"><summary>Details</summary>`
         + rows.map(p => `<div class="period-row">`
           + `<span class="period-name">${p.label}</span>`
-          + `<span>${conditionEmoji(p.cond)}</span>`
+          + `<span>${p.cond ? conditionEmoji(p.cond) : '–'}</span>`
           + `<span>${fmtHiLo(p.hi, p.lo)}</span>`
           + layersHtml(p.hi)
           + `<span>POP ${Math.round(p.pop)}%</span>`
@@ -343,7 +343,8 @@ function weekCards(days, periods) {
     return `<article class="card">`
       + `<h3 class="card-time">${weekLabel(d.date)}</h3>`
       + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
-      + `<div class="card-temp">${fmtHiLo(d.hi, d.lo)}${layersHtml(d.hi)}</div>`
+      + `<div class="card-temp">${fmtHiLo(d.hi, d.lo)}</div>`
+      + `<div class="card-layers">${layersHtml(d.hi)}</div>`
       + feelsHtml
       + `<div class="card-cond">${cond}</div>`
       + `<dl class="card-stats">`
