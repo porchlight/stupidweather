@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateWeek, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows, citypageToForecast } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows, citypageToForecast } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -283,6 +283,11 @@ function loadCachedForecast(key) {
   } catch { return null; }
 }
 
+function layersHtml(temp) {
+  const icon = layerIcon(temp);
+  return icon ? `<span class="layers">${icon}</span>` : '';
+}
+
 function hourlyList(hours, loc) {
   const groups = groupByDay(hours.slice(0, 12), loc.tz);
   const now = new Date();
@@ -299,6 +304,7 @@ function hourlyList(hours, loc) {
         + `<span class="hour-time">${clockTime(h.time, loc.tz, false)}</span>`
         + `<span class="hour-emoji">${conditionEmoji(cond)}</span>`
         + `<span class="hour-temp">${fmtTemp(h.temp)}</span>`
+        + layersHtml(h.temp)
         + feelsHtml
         + `<span class="hour-cond">${cond}</span>`
         + `</div>`
@@ -322,7 +328,7 @@ function weekCards(days) {
     return `<article class="card">`
       + `<h3 class="card-time">${weekLabel(d.date)}</h3>`
       + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
-      + `<div class="card-temp">${fmtHiLo(d.hi, d.lo)}</div>`
+      + `<div class="card-temp">${fmtHiLo(d.hi, d.lo)}${layersHtml(d.hi)}</div>`
       + feelsHtml
       + `<div class="card-cond">${cond}</div>`
       + `<dl class="card-stats">`
