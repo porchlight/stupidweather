@@ -24,9 +24,10 @@ ES module and the service worker needs an HTTP origin.
 - **Hourly** — the next 12 hours: temperature, condition, POP, precipitation,
   wind and gusts.
 - **7-Day** — daily highs/lows and totals aggregated from the hourly/6-hourly
-  points.
-- **Radar** — an animated loop of the last three hours of radar frames, plus
-  EC's extrapolated nowcast out to about the next 50 minutes.
+  points; each card expands into a morning/afternoon/evening/overnight
+  breakdown, and every view shows a layers icon for how many clothes to wear.
+- **Radar** — an animated loop of the last hour of radar frames, plus EC's
+  extrapolated nowcast out to about the next 50 minutes.
 - **Offline** — the last forecast is cached in `localStorage`; the shell is
   cached by a service worker.
 - **Loading states** — skeleton cards while the forecast streams in, and a
