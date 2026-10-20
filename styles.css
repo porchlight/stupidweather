@@ -346,6 +346,34 @@ main {
   color: var(--purple);
 }
 
+.layers {
+  margin-left: .3rem;
+}
+
+.card-details {
+  margin-top: .7rem;
+  text-align: left;
+}
+
+.card-details summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--purple);
+}
+
+.period-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .1rem .7rem;
+  padding: .35rem 0;
+  border-top: 1px solid rgba(106, 76, 147, .25);
+  font-size: .85rem;
+}
+
+.period-name {
+  font-weight: 800;
+}
+
 /* Loading skeletons */
 .card.skeleton .card-stats>div {
   background: transparent;

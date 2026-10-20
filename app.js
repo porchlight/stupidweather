@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateWeek, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows, citypageToForecast } from './logic.js';
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, aggregatePeriods, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows, citypageToForecast } from './logic.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
@@ -320,11 +320,26 @@ function hourlyList(hours, loc) {
   return `<div class="hourly">${blocks}</div>`;
 }
 
-function weekCards(days) {
+function weekCards(days, periods) {
   const cards = days.map(d => {
     const cond = d.cond ?? '–';
     const feelsHtml = d.feels != null && Math.round(d.feels) !== Math.round(d.hi)
       ? `<div class="card-feels">Feels like: ${fmtTemp(d.feels)}</div>` : '';
+    const rows = periods.get(d.date);
+    const detailsHtml = rows && rows.length
+      ? `<details class="card-details"><summary>Details</summary>`
+        + rows.map(p => `<div class="period-row">`
+          + `<span class="period-name">${p.label}</span>`
+          + `<span>${conditionEmoji(p.cond)}</span>`
+          + `<span>${fmtHiLo(p.hi, p.lo)}</span>`
+          + layersHtml(p.hi)
+          + `<span>POP ${Math.round(p.pop)}%</span>`
+          + `<span>${p.precip.toFixed(1)} mm</span>`
+          + `<span>wind ${fmtKmh(p.wind)} km/h</span>`
+          + `<span>gust ${fmtKmh(p.gust)} km/h</span>`
+          + `</div>`).join('')
+        + `</details>`
+      : '';
     return `<article class="card">`
       + `<h3 class="card-time">${weekLabel(d.date)}</h3>`
       + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
@@ -336,7 +351,9 @@ function weekCards(days) {
       + `<div><dt>Precip (mm)</dt><dd>${d.precip == null ? '–' : d.precip.toFixed(1)}</dd></div>`
       + `<div><dt>Wind (km/h)</dt><dd>${fmtKmh(d.wind)}</dd></div>`
       + `<div><dt>Gust (km/h)</dt><dd>${fmtKmh(d.gust)}</dd></div>`
-      + `</dl></article>`;
+      + `</dl>`
+      + detailsHtml
+      + `</article>`;
   }).join('');
   return `<div class="cards">${cards}</div>`;
 }
@@ -350,7 +367,8 @@ export function renderForecast(hours, loc, opts = {}) {
   document.getElementById('tab-hourly').innerHTML = hourlyList(hours, loc);
   if (opts.hourlyOnly) return;
   const days = opts.days || aggregateWeek(hours, loc.tz);
-  document.getElementById('tab-week').innerHTML = weekCards(days) + '<p class="note">POP = daily max, precip = daily total.</p>';
+  const periods = aggregatePeriods(hours, loc.tz);
+  document.getElementById('tab-week').innerHTML = weekCards(days, periods) + '<p class="note">POP = daily max, precip = daily total.</p>';
 }
 
 const RADAR_LAYER = 'RADAR_1KM_RRAI';
