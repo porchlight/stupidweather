@@ -164,6 +164,38 @@ export function aggregateWeek(hours, tz) {
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+const PERIODS = [
+  { key: 'morning', label: 'Morning', from: 6, to: 12 },
+  { key: 'afternoon', label: 'Afternoon', from: 12, to: 18 },
+  { key: 'evening', label: 'Evening', from: 18, to: 24 },
+  { key: 'overnight', label: 'Overnight', from: 0, to: 6 }
+];
+
+export function aggregatePeriods(hours, tz) {
+  const byDay = new Map();
+  for (const h of hours) {
+    const key = dateKey(h.time, tz);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(h);
+  }
+  const out = new Map();
+  for (const [key, dayHours] of byDay) {
+    const rows = [];
+    for (const p of PERIODS) {
+      const inPeriod = dayHours.filter(h => {
+        const hr = Number(tzParts(h.time, tz).hour);
+        return hr >= p.from && hr < p.to;
+      });
+      if (!inPeriod.length) continue;
+      const stat = emptyStat();
+      for (const h of inPeriod) addHour(stat, h);
+      rows.push({ key: p.key, label: p.label, ...stat });
+    }
+    out.set(key, rows);
+  }
+  return out;
+}
+
 export function citypageToForecast(props, tz, now = new Date()) {
   const hours = (props.hourlyForecastGroup?.hourlyForecasts || []).map(h => ({
     time: h.timestamp,

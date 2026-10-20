@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, layerIcon, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast } from './logic.js';
+import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, layerIcon, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast, aggregatePeriods } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -286,5 +286,27 @@ assert.equal(layerIcon(10), '👕🧶🧥');
 assert.equal(layerIcon(0), '👕🧶🧥');
 assert.equal(layerIcon(-1), '👕🧶🧥🥶');
 assert.equal(layerIcon(null), '');
+
+// aggregatePeriods: 4 local-hour buckets (Toronto Oct = UTC-4), empty buckets omitted,
+// dates absent without hours; temps >10 keep feels null so deepEqual stays exact
+const periodHours = [
+  { time: '2026-10-14T04:00:00Z', pop: 5, precip: 0, temp: 11, wind: 4, gust: null, cloud: null, tstorm: null },   // 00:00 local -> overnight
+  { time: '2026-10-14T10:00:00Z', pop: 20, precip: 1, temp: 13, wind: 3, gust: 6, cloud: 10, tstorm: 0 },        // 06:00 local -> morning (edge)
+  { time: '2026-10-14T16:00:00Z', pop: 60, precip: 2, temp: 22, wind: 5, gust: 11, cloud: 90, tstorm: 0 },       // 12:00 local -> afternoon (edge)
+  { time: '2026-10-14T22:00:00Z', pop: 10, precip: 0.5, temp: 15, wind: 6, gust: 9, cloud: 40, tstorm: 0 },      // 18:00 local -> evening (edge)
+  { time: '2026-10-15T16:00:00Z', pop: 30, precip: 4, temp: 14, wind: 8, gust: null, cloud: 45, tstorm: 40 }     // 12:00 local Oct 15 -> lone afternoon
+];
+const periods = aggregatePeriods(periodHours, 'America/Toronto');
+assert.equal(periods.size, 2);
+assert.deepEqual(periods.get('2026-10-14').map(p => p.key),
+  ['morning', 'afternoon', 'evening', 'overnight']);
+assert.deepEqual(periods.get('2026-10-14')[0],
+  { key: 'morning', label: 'Morning', pop: 20, precip: 1, hi: 13, lo: 13, wind: 3, gust: 6, cond: 'Sunny', feels: null });
+assert.deepEqual(periods.get('2026-10-14')[2],
+  { key: 'evening', label: 'Evening', pop: 10, precip: 0.5, hi: 15, lo: 15, wind: 6, gust: 9, cond: 'Partly cloudy', feels: null });
+assert.deepEqual(periods.get('2026-10-15'),
+  [{ key: 'afternoon', label: 'Afternoon', pop: 30, precip: 4, hi: 14, lo: 14, wind: 8, gust: null, cond: 'Thunderstorm', feels: null }]);
+// no hours at all -> empty map
+assert.equal(aggregatePeriods([], 'America/Toronto').size, 0);
 
 console.log('selfcheck OK');
