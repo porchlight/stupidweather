@@ -302,16 +302,6 @@ main {
   color: rgba(106, 76, 147, .75);
 }
 
-.card-cond {
-  display: inline-block;
-  margin: 0 0 .7rem;
-  padding: .15rem .7rem;
-  font-weight: 800;
-  background: var(--yellow);
-  color: var(--on-bright);
-  border-radius: 999px;
-}
-
 .card-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -352,7 +342,8 @@ main {
 }
 
 .layers {
-  margin-left: .3rem;
+  display: block;
+  margin: .4rem 0 .3rem;
 }
 
 .card-details {
@@ -367,12 +358,16 @@ main {
 }
 
 .period-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .1rem .7rem;
   padding: .35rem 0;
   border-top: 1px solid rgba(106, 76, 147, .25);
   font-size: .85rem;
+}
+
+.period-head,
+.period-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .1rem .7rem;
 }
 
 .period-name {
@@ -412,7 +407,7 @@ main {
   margin: .2rem auto .5rem;
 }
 
-.sk-cond {
+.sk-layers {
   width: 45%;
   height: 1.1rem;
   margin: 0 auto .7rem;

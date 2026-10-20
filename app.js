@@ -304,7 +304,6 @@ function hourlyList(hours, loc) {
         + `<span class="hour-time">${clockTime(h.time, loc.tz, false)}</span>`
         + `<span class="hour-emoji">${conditionEmoji(cond)}</span>`
         + `<span class="hour-temp">${fmtTemp(h.temp)}</span>`
-        + layersHtml(h.temp)
         + feelsHtml
         + `<span class="hour-cond">${cond}</span>`
         + `</div>`
@@ -313,7 +312,9 @@ function hourlyList(hours, loc) {
         + `<span>${h.precip == null ? '–' : h.precip.toFixed(1)} mm</span>`
         + `<span>wind ${fmtKmh(h.wind)} km/h</span>`
         + `<span>gust ${fmtKmh(h.gust)} km/h</span>`
-        + `</p></article>`;
+        + `</p>`
+        + layersHtml(h.temp)
+        + `</article>`;
     }).join('');
     return head + rows;
   }).join('');
@@ -329,14 +330,18 @@ function weekCards(days, periods) {
     const detailsHtml = rows && rows.length
       ? `<details class="card-details"><summary>Details</summary>`
         + rows.map(p => `<div class="period-row">`
+          + `<div class="period-head">`
           + `<span class="period-name">${p.label}</span>`
           + `<span>${p.cond ? conditionEmoji(p.cond) : '–'}</span>`
           + `<span>${fmtHiLo(p.hi, p.lo)}</span>`
-          + layersHtml(p.hi)
+          + `</div>`
+          + `<div class="period-stats">`
           + `<span>POP ${Math.round(p.pop)}%</span>`
           + `<span>${p.precip.toFixed(1)} mm</span>`
           + `<span>wind ${fmtKmh(p.wind)} km/h</span>`
           + `<span>gust ${fmtKmh(p.gust)} km/h</span>`
+          + `</div>`
+          + layersHtml(p.hi)
           + `</div>`).join('')
         + `</details>`
       : '';
@@ -344,9 +349,8 @@ function weekCards(days, periods) {
       + `<h3 class="card-time">${weekLabel(d.date)}</h3>`
       + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
       + `<div class="card-temp">${fmtHiLo(d.hi, d.lo)}</div>`
-      + `<div class="card-layers">${layersHtml(d.hi)}</div>`
       + feelsHtml
-      + `<div class="card-cond">${cond}</div>`
+      + `<div class="card-layers">${layersHtml(d.hi)}</div>`
       + `<dl class="card-stats">`
       + `<div><dt>POP</dt><dd>${d.pop == null ? '–' : Math.round(d.pop) + '%'}</dd></div>`
       + `<div><dt>Precip (mm)</dt><dd>${d.precip == null ? '–' : d.precip.toFixed(1)}</dd></div>`

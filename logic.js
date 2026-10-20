@@ -306,7 +306,7 @@ export function skeletonCards(n) {
     + '<span class="sk sk-time"></span>'
     + '<span class="sk sk-emoji"></span>'
     + '<span class="sk sk-temp"></span>'
-    + '<span class="sk sk-cond"></span>'
+    + '<span class="sk sk-layers"></span>'
     + '<dl class="card-stats">'
     + '<div><span class="sk sk-line"></span></div>'.repeat(4)
     + '</dl></article>';
