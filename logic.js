@@ -165,10 +165,10 @@ export function aggregateWeek(hours, tz) {
 }
 
 const PERIODS = [
+  { key: 'overnight', label: 'Overnight', from: 0, to: 6 },
   { key: 'morning', label: 'Morning', from: 6, to: 12 },
   { key: 'afternoon', label: 'Afternoon', from: 12, to: 18 },
-  { key: 'evening', label: 'Evening', from: 18, to: 24 },
-  { key: 'overnight', label: 'Overnight', from: 0, to: 6 }
+  { key: 'evening', label: 'Evening', from: 18, to: 24 }
 ];
 
 export function aggregatePeriods(hours, tz) {

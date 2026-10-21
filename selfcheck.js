@@ -299,10 +299,10 @@ const periodHours = [
 const periods = aggregatePeriods(periodHours, 'America/Toronto');
 assert.equal(periods.size, 2);
 assert.deepEqual(periods.get('2026-10-14').map(p => p.key),
-  ['morning', 'afternoon', 'evening', 'overnight']);
-assert.deepEqual(periods.get('2026-10-14')[0],
+  ['overnight', 'morning', 'afternoon', 'evening']);
+assert.deepEqual(periods.get('2026-10-14')[1],
   { key: 'morning', label: 'Morning', pop: 20, precip: 1, hi: 13, lo: 13, wind: 3, gust: 6, cond: 'Sunny', feels: null });
-assert.deepEqual(periods.get('2026-10-14')[2],
+assert.deepEqual(periods.get('2026-10-14')[3],
   { key: 'evening', label: 'Evening', pop: 10, precip: 0.5, hi: 15, lo: 15, wind: 6, gust: 9, cond: 'Partly cloudy', feels: null });
 assert.deepEqual(periods.get('2026-10-15'),
   [{ key: 'afternoon', label: 'Afternoon', pop: 30, precip: 4, hi: 14, lo: 14, wind: 8, gust: null, cond: 'Thunderstorm', feels: null }]);
