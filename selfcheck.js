@@ -1,19 +1,19 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, layerIcon, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast, aggregatePeriods } from './logic.js';
+import { tzParts, dateKey, forecastTimes, weekSampleIndices, forecastPriorities, forecastView, forecastReadiness, precipitationHours, precipitationTotals, nearestCity, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, layerIcon, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast, aggregatePeriods } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
   { year: '2026', month: '10', day: '14', hour: '22', minute: '00' });
 assert.equal(dateKey('2026-10-15T02:00:00Z', 'America/Toronto'), '2026-10-14');
 
-// forecastTimes: 12 hourly points then 6-hourly out to 7 days, all on :00
+// forecastTimes: next 12 hourly points, then 6-hourly including a closing rain-total endpoint
 const times = forecastTimes(new Date('2026-10-14T17:30:00Z'));
-assert.equal(times.length, 38);
-assert.equal(times[0], '2026-10-14T17:00:00.000Z');
-assert.equal(times[11], '2026-10-15T04:00:00.000Z');
+assert.equal(times.length, 39);
+assert.equal(times[0], '2026-10-14T18:00:00.000Z');
+assert.equal(times[11], '2026-10-15T05:00:00.000Z');
 assert.equal(times[12], '2026-10-15T06:00:00.000Z');
-assert.equal(times[times.length - 1], '2026-10-21T12:00:00.000Z');
+assert.equal(times[times.length - 1], '2026-10-21T18:00:00.000Z');
 assert.ok(times.every(t => t.endsWith(':00:00.000Z')));
 
 // sample hours for the week aggregation (Toronto, EDT = UTC-4 in October)
@@ -26,7 +26,7 @@ const hours = [
 // aggregateWeek: group by local date, pop=max, precip=sum
 const weekHours = [...hours, { time: '2026-10-15T14:00:00Z', pop: 30, precip: 4, temp: 15, wind: 8, gust: null, cloud: 45, tstorm: 40 }];
 const week = aggregateWeek(weekHours, 'America/Toronto');
-assert.deepEqual(week[0], { date: '2026-10-14', pop: 60, precip: 3, hi: 18.2, lo: 6.1, wind: 5, gust: 11, cond: 'Cloudy', feels: null });
+assert.deepEqual(week[0], { date: '2026-10-14', pop: 60, precip: 3, hi: 18.2, lo: 6.1, wind: 5, gust: 11, cond: 'Rain', feels: null });
 assert.deepEqual(week[1], { date: '2026-10-15', pop: 30, precip: 4, hi: 15, lo: 15, wind: 8, gust: null, cond: 'Thunderstorm', feels: null });
 
 // winter: sub-zero hours aggregate to snow; January dates/labels hold
@@ -73,7 +73,7 @@ assert.equal(conditionWord(10, 0, -5, 0.9, 12), 'Flurries');
 assert.equal(conditionWord(10, 40, -5, 0.5, 3), 'Flurries');
 assert.equal(conditionWord(10, 40, -5, 1.5, 12), 'Blizzard');
 assert.equal(conditionWord(10, 0, -5, 0, 12), 'Sunny');
-assert.equal(conditionWord(10, 0, 5, 1.5, 12), 'Sunny');
+assert.equal(conditionWord(10, 0, 5, 1.5, 12), 'Rain');
 
 // conditionEmoji: one emoji per condition, empty string when unknown
 assert.equal(conditionEmoji('Sunny'), '☀️');
@@ -210,7 +210,7 @@ assert.equal(ecConditionWord('Clear'), 'Clear');
 assert.equal(ecConditionWord('A few clouds'), 'Partly cloudy');
 assert.equal(ecConditionWord('Partly cloudy'), 'Partly cloudy');
 assert.equal(ecConditionWord('Cloudy'), 'Cloudy');
-assert.equal(ecConditionWord('Chance of showers'), 'Cloudy');
+assert.equal(ecConditionWord('Chance of showers'), 'Rain');
 assert.equal(ecConditionWord('Thunderstorms'), 'Thunderstorm');
 assert.equal(ecConditionWord('Flurries'), 'Flurries');
 assert.equal(ecConditionWord('Blowing snow'), 'Flurries');
@@ -301,12 +301,150 @@ assert.equal(periods.size, 2);
 assert.deepEqual(periods.get('2026-10-14').map(p => p.key),
   ['overnight', 'morning', 'afternoon', 'evening']);
 assert.deepEqual(periods.get('2026-10-14')[1],
-  { key: 'morning', label: 'Morning', pop: 20, precip: 1, hi: 13, lo: 13, wind: 3, gust: 6, cond: 'Sunny', feels: null });
+  { key: 'morning', label: 'Morning', pop: 20, precip: 1, hi: 13, lo: 13, wind: 3, gust: 6, cond: 'Rain', feels: null });
 assert.deepEqual(periods.get('2026-10-14')[3],
-  { key: 'evening', label: 'Evening', pop: 10, precip: 0.5, hi: 15, lo: 15, wind: 6, gust: 9, cond: 'Partly cloudy', feels: null });
+  { key: 'evening', label: 'Evening', pop: 10, precip: 0.5, hi: 15, lo: 15, wind: 6, gust: 9, cond: 'Rain', feels: null });
 assert.deepEqual(periods.get('2026-10-15'),
   [{ key: 'afternoon', label: 'Afternoon', pop: 30, precip: 4, hi: 14, lo: 14, wind: 8, gust: null, cond: 'Thunderstorm', feels: null }]);
 // no hours at all -> empty map
 assert.equal(aggregatePeriods([], 'America/Toronto').size, 0);
+
+const stableNow = new Date('2026-10-22T14:30:00Z');
+const cityPreview = {
+  hours: [{ time: '2026-10-22T15:00:00Z', temp: 11, pop: 0, cond: 'Sunny', wind: 2, precip: null }],
+  days: [{ date: '2026-10-22', hi: 13, lo: 4, cond: 'Sunny', pop: 0 }]
+};
+const preview = forecastView([], cityPreview, 'America/Toronto', stableNow);
+const enriched = forecastView([
+  { time: '2026-10-22T15:00:00Z', temp: 9, pop: 80, wind: 10, gust: 15, cloud: 100, precip: 2 },
+  { time: '2026-10-23T15:00:00Z', temp: 8, pop: null, precip: null }
+], cityPreview, 'America/Toronto', stableNow);
+assert.equal(preview.hours.length, 12);
+assert.equal(preview.days.length, 7);
+assert.deepEqual(enriched.days.map(d => d.date), preview.days.map(d => d.date));
+assert.deepEqual(enriched.hours.map(h => Date.parse(h.time)), preview.hours.map(h => Date.parse(h.time)));
+assert.equal(enriched.hours[0].temp, 11);
+assert.equal(enriched.hours[0].pop, 0);
+assert.equal(enriched.hours[0].cond, 'Sunny');
+assert.equal(enriched.hours[0].gust, 15);
+assert.equal(enriched.days[0].hi, 13);
+assert.equal(enriched.days[0].lo, 4);
+assert.equal(enriched.days[0].cond, 'Sunny');
+assert.equal(enriched.days[1].pop, null);
+assert.equal(enriched.days[1].precip, null);
+assert.equal(preview.periods.get('2026-10-22').length, 0);
+assert.equal(enriched.periods.get('2026-10-22').length, 1);
+assert.equal(forecastView([], null, 'Pacific/Kiritimati', stableNow).days[0].date, '2026-10-23');
+
+const cumulative = Array.from({ length: 5 }, (_, i) => ({
+  time: new Date(Date.parse('2026-10-23T00:00:00Z') + i * 6 * 3600e3).toISOString(),
+  precipTotal: i * 6
+}));
+const rainTotals = precipitationTotals(cumulative, 'UTC');
+assert.equal(rainTotals.get('2026-10-23').total, 24);
+assert.equal(rainTotals.get('2026-10-23').complete, true);
+assert.equal(rainTotals.get('2026-10-23').periods.get('afternoon').total, 6);
+const missingRain = cumulative.map((h, i) => ({ ...h, precipTotal: i === 2 ? null : h.precipTotal }));
+assert.equal(precipitationTotals(missingRain, 'UTC').get('2026-10-23').complete, false);
+assert.equal(forecastView(missingRain, null, 'UTC', new Date(cumulative[0].time)).days[0].precip, null);
+assert.equal(precipitationHours(cumulative)[1].precip, null);
+assert.equal(precipitationHours(cumulative)[1].precipRate, 1);
+assert.equal(precipitationHours([{ time: '2026-10-23T00:00:00Z', precipTotal: 2 },
+  { time: '2026-10-23T01:00:00Z', precipTotal: 2.5 }])[1].precip, 0.5);
+assert.equal(precipitationHours([{ time: '2026-10-23T00:00:00Z', precipTotal: 2 },
+  { time: '2026-10-23T01:00:00Z', precipTotal: 1 }])[1].precip, null);
+const shiftedTotals = precipitationTotals(cumulative, 'Asia/Kolkata');
+assert.equal(shiftedTotals.get('2026-10-23').total + shiftedTotals.get('2026-10-24').total, 24);
+const dstRain = [
+  { time: '2026-11-01T04:00:00Z', precipTotal: 0 },
+  { time: '2026-11-02T05:00:00Z', precipTotal: 25 }
+];
+assert.equal(precipitationTotals(dstRain, 'America/Toronto').get('2026-11-01').total, 25);
+assert.equal(aggregateWeek([{ time: '2026-10-23T00:00:00Z', temp: 8 }], 'UTC')[0].pop, null);
+assert.equal(aggregateWeek([{ time: '2026-10-23T00:00:00Z', temp: 8 }], 'UTC')[0].precip, null);
+assert.equal(ecConditionWord('Rain showers'), 'Rain');
+assert.equal(conditionEmoji('Rain'), '🌧️');
+
+const near = { geometry: { coordinates: [-79.39, 43.65] } };
+const farther = { geometry: { coordinates: [-79.6, 43.8] } };
+assert.equal(nearestCity([farther, near], { lat: 43.65, lon: -79.38 }), near);
+assert.equal(nearestCity([farther], { lat: 0, lon: 0 }), null);
+assert.equal(nearestCity([{ geometry: null }], { lat: 43.65, lon: -79.38 }), null);
+
+let active = 0;
+let peak = 0;
+await pool(Array.from({ length: 15 }), 3, async () => {
+  peak = Math.max(peak, ++active);
+  await new Promise(resolve => setTimeout(resolve, 1));
+  active--;
+});
+assert.equal(peak, 3);
+
+const shortenedRain = cumulative.slice(0, 3);
+assert.equal(forecastView(shortenedRain, null, 'UTC', new Date(cumulative[0].time)).days[0].precip, null);
+const lateStartRain = cumulative.slice(1);
+assert.equal(forecastView(lateStartRain, null, 'UTC', new Date(cumulative[0].time)).days[0].precip, null);
+assert.equal(forecastView(lateStartRain, null, 'UTC', new Date(lateStartRain[0].time)).days[0].precip, 18);
+
+const readinessHours = [
+  '2026-10-22T23:00:00Z',
+  '2026-10-23T00:00:00Z',
+  '2026-10-23T06:00:00Z',
+  '2026-10-23T12:00:00Z',
+  '2026-10-23T18:00:00Z',
+  '2026-10-24T00:00:00Z',
+  '2026-10-24T06:00:00Z'
+].map(time => ({ time }));
+const waitingBoundary = forecastReadiness(readinessHours, new Set([0, 1, 2, 3, 4]), 'UTC');
+assert.equal(waitingBoundary.days.has('2026-10-23'), false);
+assert.equal(waitingBoundary.hours.has(Date.parse(readinessHours[1].time)), true);
+const dayComplete = forecastReadiness(readinessHours, new Set([0, 1, 2, 3, 4, 5]), 'UTC');
+assert.equal(dayComplete.days.has('2026-10-23'), true);
+assert.equal(dayComplete.days.has('2026-10-24'), false);
+assert.equal(forecastReadiness(readinessHours, new Set([1]), 'UTC').hours.has(Date.parse(readinessHours[1].time)), false);
+assert.equal(forecastReadiness(readinessHours, new Set([1, 2, 3, 4, 5]), 'UTC').days.has('2026-10-23'), false);
+assert.equal(forecastReadiness(readinessHours, new Set([0, 1, 2, 3, 4, 5, 6]), 'UTC').days.size, 3);
+assert.equal(forecastReadiness(readinessHours, new Set(), 'America/Toronto').days.size, 0);
+
+let queueTab = 'hourly';
+const startedRequests = [];
+const orderedResults = await pool([0, 1, 2, 3, 4, 5], 1, async value => {
+  startedRequests.push(value);
+  if (value === 0) queueTab = 'week';
+  if (value === 5) queueTab = 'hourly';
+  return value * 10;
+}, value => queueTab === 'week' ? 5 - value : value);
+assert.deepEqual(startedRequests, [0, 5, 1, 2, 3, 4]);
+assert.deepEqual(orderedResults, [0, 10, 20, 30, 40, 50]);
+assert.equal(new Set(startedRequests).size, 6);
+
+const prioritySlots = forecastTimes(stableNow);
+const priorityHours = [new Date(Date.parse(prioritySlots[0]) - 3600e3).toISOString(), ...prioritySlots]
+  .map(time => ({ time }));
+const weekIndices = weekSampleIndices(priorityHours);
+assert.equal(weekIndices.includes(2), false);
+assert.equal(weekIndices.includes(1), true);
+assert.equal(weekIndices.every(i => i < 2 || new Date(priorityHours[i].time).getUTCHours() % 6 === 0), true);
+const hourlyRanks = forecastPriorities(priorityHours, 'America/Toronto', 'hourly');
+const weekRanks = forecastPriorities(priorityHours, 'America/Toronto', 'week');
+const firstDayIndices = new Set(weekRanks.flatMap((rank, i) => rank === 0 ? [i] : []));
+assert.equal(hourlyRanks[2] < hourlyRanks[13], true);
+assert.equal(weekRanks[13] < weekRanks[2], true);
+assert.equal(firstDayIndices.size < 12, true);
+assert.equal(forecastReadiness(priorityHours, firstDayIndices, 'America/Toronto').days.has('2026-10-22'), true);
+assert.equal(forecastReadiness(priorityHours, firstDayIndices, 'America/Toronto').hours.has(Date.parse(priorityHours[2].time)), false);
+const sparseGrid = priorityHours.map((h, i) => ({ ...h,
+  temp: weekIndices.includes(i) ? 10 : null,
+  cloud: weekIndices.includes(i) ? 0 : null,
+  precipTotal: weekIndices.includes(i) ? (Date.parse(h.time) - Date.parse(priorityHours[0].time)) / 3600e3 : null
+}));
+const denseGrid = sparseGrid.map((h, i) => weekIndices.includes(i) ? h : { ...h, temp: 99, cloud: 100, precipTotal: 999 });
+const beforeHourly = forecastView(precipitationHours(sparseGrid), null, 'America/Toronto', stableNow);
+const afterHourly = forecastView(precipitationHours(denseGrid), null, 'America/Toronto', stableNow);
+assert.deepEqual(afterHourly.days, beforeHourly.days);
+assert.deepEqual(afterHourly.periods, beforeHourly.periods);
+const indiaRanks = forecastPriorities(priorityHours, 'Asia/Kolkata', 'week');
+const indiaFirst = new Set(indiaRanks.flatMap((rank, i) => rank === 0 ? [i] : []));
+assert.equal(forecastReadiness(priorityHours, indiaFirst, 'Asia/Kolkata').days.has('2026-10-22'), true);
 
 console.log('selfcheck OK');
