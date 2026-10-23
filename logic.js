@@ -1,18 +1,7 @@
 export const REFRESH_MS = 12 * 60 * 1000;
 
-const formatters = new Map();
-
-function formatter(locale, options) {
-  const key = JSON.stringify([locale, options]);
-  if (!formatters.has(key)) {
-    if (formatters.size >= 64) formatters.delete(formatters.keys().next().value);
-    formatters.set(key, new Intl.DateTimeFormat(locale, options));
-  }
-  return formatters.get(key);
-}
-
 export function tzParts(iso, tz) {
-  const fmt = formatter('en-CA', {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
   });
@@ -27,7 +16,7 @@ export function dateKey(iso, tz) {
 }
 
 export function clockTime(iso, tz, withMinutes = true) {
-  const fmt = formatter('en-US', {
+  const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true
   });
   const p = {};
@@ -36,30 +25,30 @@ export function clockTime(iso, tz, withMinutes = true) {
 }
 
 export function dayLabel(iso, tz) {
-  return formatter('en-US', { timeZone: tz, month: 'short', day: 'numeric' }).format(new Date(iso));
+  return new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'short', day: 'numeric' }).format(new Date(iso));
 }
 
 // key is a local 'YYYY-MM-DD' date key; formatting it in UTC keeps the calendar
 // date exact for any timezone (the old noon-UTC proxy put UTC+13 a day ahead)
 export function weekLabel(key) {
   const d = new Date(`${key}T00:00:00Z`);
-  const date = formatter('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(d);
-  const weekday = formatter('en-CA', { timeZone: 'UTC', weekday: 'long' }).format(d);
+  const date = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(d);
+  const weekday = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', weekday: 'long' }).format(d);
   return `${date} ${weekday}`;
 }
 
 export function forecastTimes(now = new Date()) {
-  const start = new Date(Math.ceil(now.getTime() / 3600e3) * 3600e3);
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
   const out = [];
   for (let i = 0; i < 12; i++) out.push(new Date(start.getTime() + i * 3600e3).toISOString());
   const H6 = 6 * 3600e3;
   const end = start.getTime() + 7 * 24 * 3600e3;
   let t = Math.ceil((start.getTime() + 12 * 3600e3) / H6) * H6;
-  while (t <= Math.ceil(end / H6) * H6) { out.push(new Date(t).toISOString()); t += H6; }
+  while (t < end) { out.push(new Date(t).toISOString()); t += H6; }
   return out;
 }
 
-const SEVERITY = ['Clear', 'Sunny', 'Partly cloudy', 'Cloudy', 'Rain', 'Flurries', 'Thunderstorm', 'Blizzard'];
+const SEVERITY = ['Sunny', 'Partly cloudy', 'Cloudy', 'Flurries', 'Thunderstorm', 'Blizzard'];
 
 // ponytail: fixed 7-19 local window; NOAA sunrise/sunset math if polar/edge latitudes matter
 export function isNight(iso, tz) {
@@ -77,7 +66,6 @@ export function conditionWord(cloud, tstorm, temp, precip, wind, night = false) 
     if (precip >= BLIZZARD_PRECIP && wind != null && wind >= BLIZZARD_WIND) word = 'Blizzard';
     else word = 'Flurries';
   } else if (tstorm != null && tstorm >= 30) word = 'Thunderstorm';
-  else if (precip > 0) word = 'Rain';
   else if (cloud == null) word = '–';
   else if (cloud < 25) word = 'Sunny';
   else if (cloud < 70) word = 'Partly cloudy';
@@ -94,7 +82,6 @@ export function ecConditionWord(text) {
   if (s.includes('thunder')) return 'Thunderstorm';
   if (s.includes('blizzard')) return 'Blizzard';
   if (s.includes('flurr') || s.includes('snow')) return 'Flurries';
-  if (/rain|shower|drizzle/.test(s)) return 'Rain';
   if (s.includes('sunny')) return 'Sunny';
   if (s.includes('clear')) return 'Clear';
   if (s.includes('few') || s.includes('partly')) return 'Partly cloudy';
@@ -106,7 +93,6 @@ const CONDITION_EMOJI = {
   'Clear': '🌙',
   'Partly cloudy': '⛅',
   'Cloudy': '☁️',
-  'Rain': '🌧️',
   'Thunderstorm': '⛈️',
   'Flurries': '🌨️',
   'Blizzard': '❄️'
@@ -149,12 +135,12 @@ function worse(a, b) {
 }
 
 function emptyStat() {
-  return { pop: null, precip: null, hi: null, lo: null, wind: null, gust: null, cond: null, feels: null };
+  return { pop: 0, precip: 0, hi: null, lo: null, wind: null, gust: null, cond: null, feels: null };
 }
 
 function addHour(stat, h) {
-  if (h.pop != null) stat.pop = Math.max(stat.pop ?? 0, h.pop);
-  if (h.precip != null) stat.precip = (stat.precip ?? 0) + h.precip;
+  stat.pop = Math.max(stat.pop, h.pop ?? 0);
+  stat.precip += h.precip ?? 0;
   if (h.temp != null) {
     if (stat.hi == null || h.temp > stat.hi) {
       stat.hi = h.temp;
@@ -164,7 +150,7 @@ function addHour(stat, h) {
   }
   if (h.wind != null) stat.wind = stat.wind == null ? h.wind : Math.max(stat.wind, h.wind);
   if (h.gust != null) stat.gust = stat.gust == null ? h.gust : Math.max(stat.gust, h.gust);
-  const c = conditionWord(h.cloud, h.tstorm, h.temp, h.precipRate ?? h.precip, h.wind);
+  const c = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
   if (c !== '–') stat.cond = worse(stat.cond, c);
 }
 
@@ -186,162 +172,28 @@ const PERIODS = [
 ];
 
 export function aggregatePeriods(hours, tz) {
-  const out = new Map();
+  const byDay = new Map();
   for (const h of hours) {
-    const parts = tzParts(h.time, tz);
-    const key = `${parts.year}-${parts.month}-${parts.day}`;
-    if (!out.has(key)) out.set(key, new Map());
-    const period = PERIODS[Math.floor(Number(parts.hour) / 6)];
-    const rows = out.get(key);
-    if (!rows.has(period.key)) rows.set(period.key, { key: period.key, label: period.label, ...emptyStat() });
-    addHour(rows.get(period.key), h);
+    const key = dateKey(h.time, tz);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(h);
   }
-  return new Map([...out].map(([key, rows]) => [key, PERIODS.map(p => rows.get(p.key)).filter(Boolean)]));
-}
-
-export function precipitationHours(hours) {
-  return hours.map((h, i) => {
-    const prev = hours[i - 1];
-    const dt = prev ? (Date.parse(h.time) - Date.parse(prev.time)) / 3600e3 : 0;
-    const amount = prev?.precipTotal != null && h.precipTotal != null && h.precipTotal >= prev.precipTotal
-      ? h.precipTotal - prev.precipTotal : null;
-    return { ...h, precip: dt === 1 ? amount : null, precipRate: dt > 0 && amount != null ? amount / dt : null };
-  });
-}
-
-export function precipitationTotals(hours, tz) {
   const out = new Map();
-  // ponytail: split sparse model intervals at a constant rain rate; use finer model intervals for more exact local-day totals
-  for (let i = 1; i < hours.length; i++) {
-    const prev = hours[i - 1];
-    const next = hours[i];
-    const from = Date.parse(prev.time);
-    const to = Date.parse(next.time);
-    if (!(to > from)) continue;
-    const amount = prev.precipTotal != null && next.precipTotal != null
-      && next.precipTotal >= prev.precipTotal ? next.precipTotal - prev.precipTotal : null;
-    for (let t = from; t < to;) {
-      const end = Math.min(to, (Math.floor(t / 900e3) + 1) * 900e3);
-      const p = tzParts(new Date((t + end) / 2).toISOString(), tz);
-      const date = `${p.year}-${p.month}-${p.day}`;
-      if (!out.has(date)) out.set(date, { total: 0, complete: true, from: t, to: end, periods: new Map() });
-      const day = out.get(date);
-      const key = PERIODS[Math.floor(Number(p.hour) / 6)].key;
-      if (!day.periods.has(key)) day.periods.set(key, { total: 0, complete: true, from: t, to: end });
-      const period = day.periods.get(key);
-      day.to = end;
-      period.to = end;
-      if (amount == null) { day.complete = false; period.complete = false; }
-      else {
-        const part = amount * (end - t) / (to - from);
-        day.total += part;
-        period.total += part;
-      }
-      t = end;
+  for (const [key, dayHours] of byDay) {
+    const rows = [];
+    for (const p of PERIODS) {
+      const inPeriod = dayHours.filter(h => {
+        const hr = Number(tzParts(h.time, tz).hour);
+        return hr >= p.from && hr < p.to;
+      });
+      if (!inPeriod.length) continue;
+      const stat = emptyStat();
+      for (const h of inPeriod) addHour(stat, h);
+      rows.push({ key: p.key, label: p.label, ...stat });
     }
+    out.set(key, rows);
   }
   return out;
-}
-
-export function weekSampleIndices(hours) {
-  return hours.flatMap((h, i) => i < 2 || new Date(h.time).getUTCHours() % 6 === 0 ? [i] : []);
-}
-
-export function forecastPriorities(hours, tz, tab) {
-  const priorities = hours.map((_, i) => 1000 + i);
-  if (tab !== 'week') return priorities.map((rank, i) => i <= 12 ? i : rank);
-  const indices = weekSampleIndices(hours);
-  const dates = indices.map(i => dateKey(hours[i].time, tz));
-  [...new Set(dates)].forEach((date, rank) => {
-    indices.forEach((index, i) => {
-      if (dates[i] === date || dates[i - 1] === date || dates[i + 1] === date) {
-        priorities[index] = Math.min(priorities[index], rank);
-      }
-    });
-  });
-  return priorities;
-}
-
-export function forecastReadiness(hours, completed, tz) {
-  const readyHours = new Set();
-  const readyDays = new Set();
-  for (let i = 0; i < hours.length; i++) {
-    if (completed.has(i) && (i === 0 || completed.has(i - 1))) readyHours.add(Date.parse(hours[i].time));
-  }
-  const indices = weekSampleIndices(hours);
-  const dates = indices.map(i => dateKey(hours[i].time, tz));
-  for (const date of new Set(dates)) {
-    const ready = dates.every((key, i) => {
-      const contributes = key === date || dates[i - 1] === date || dates[i + 1] === date;
-      return !contributes || completed.has(indices[i]);
-    });
-    if (ready) readyDays.add(date);
-  }
-  return { hours: readyHours, days: readyDays };
-}
-
-export function forecastView(hours, city, tz, now = new Date()) {
-  const slots = forecastTimes(now).slice(0, 12);
-  const gridHours = new Map(hours.map(h => [Date.parse(h.time), h]));
-  const cityHours = new Map((city?.hours || []).map(h => [Date.parse(h.time), h]));
-  const merge = (fallback, primary) => {
-    const result = { ...fallback };
-    for (const [key, value] of Object.entries(primary || {})) {
-      if (value != null) result[key] = value;
-    }
-    return result;
-  };
-  const visibleHours = slots.map(time => merge({ time, ...gridHours.get(Date.parse(time)) }, cityHours.get(Date.parse(time))));
-  const weekHours = precipitationHours(weekSampleIndices(hours).map(i => hours[i]));
-  const gridDays = new Map(aggregateWeek(weekHours, tz).map(d => [d.date, d]));
-  const cityDays = new Map((city?.days || []).map(d => [d.date, d]));
-  const totals = precipitationTotals(weekHours, tz);
-  const periods = aggregatePeriods(weekHours, tz);
-  const today = dateKey(now.toISOString(), tz);
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date(`${today}T00:00:00Z`);
-    date.setUTCDate(date.getUTCDate() + i);
-    const key = date.toISOString().slice(0, 10);
-    const d = merge({ ...emptyStat(), ...gridDays.get(key), date: key }, cityDays.get(key));
-    const total = totals.get(key);
-    const fullStart = total && dateKey(new Date(total.from - 1).toISOString(), tz) !== key;
-    const fullEnd = total && dateKey(new Date(total.to).toISOString(), tz) !== key;
-    const remaining = key === today && total?.from <= now.getTime();
-    d.precip = total?.complete && (fullStart || remaining) && fullEnd ? total.total : null;
-    d.feels = windChill(d.hi, d.wind);
-    const rows = periods.get(key) || [];
-    periods.set(key, PERIODS.filter(p => rows.some(r => r.key === p.key)).map(p => {
-      const row = { key: p.key, label: p.label, ...emptyStat(), ...rows.find(r => r.key === p.key) };
-      const amount = total?.periods.get(p.key);
-      const bucket = t => {
-        const parts = tzParts(new Date(t).toISOString(), tz);
-        return `${parts.year}-${parts.month}-${parts.day}:${Math.floor(Number(parts.hour) / 6)}`;
-      };
-      const id = `${key}:${Math.floor(p.from / 6)}`;
-      const start = amount && bucket(amount.from - 1) !== id;
-      const end = amount && bucket(amount.to) !== id;
-      const current = amount?.from <= now.getTime() && amount?.to > now.getTime();
-      row.precip = amount?.complete && (start || current) && end ? amount.total : null;
-      return row;
-    }));
-    return d;
-  });
-  return { hours: visibleHours, days, periods };
-}
-
-export function nearestCity(features, loc) {
-  const radians = x => x * Math.PI / 180;
-  let closest = null;
-  let best = 30;
-  for (const feature of features) {
-    const [lon, lat] = feature.geometry?.coordinates || [];
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-    const a = Math.sin(radians(lat - loc.lat) / 2) ** 2
-      + Math.cos(radians(loc.lat)) * Math.cos(radians(lat)) * Math.sin(radians(lon - loc.lon) / 2) ** 2;
-    const km = 6371 * 2 * Math.asin(Math.sqrt(Math.min(1, a)));
-    if (km < best) { best = km; closest = feature; }
-  }
-  return closest;
 }
 
 export function citypageToForecast(props, tz, now = new Date()) {
@@ -364,7 +216,9 @@ export function citypageToForecast(props, tz, now = new Date()) {
   return { hours, days };
 }
 
-// ponytail: feels uses the day's max wind; use paired temperature/wind samples for a precise feels-like high
+// ponytail: days pair positionally (day advances, night fills), not by weekday name;
+// feels uses the day's max wind instead of the high-temp hour's wind — grid data
+// replaces this within seconds, so the degree of precision isn't worth parsing
 function citypageDays(periods, tz, now) {
   const out = new Map();
   let cur = dateKey(now.toISOString(), tz);
@@ -380,11 +234,7 @@ function citypageDays(periods, tz, now) {
   for (const p of periods) {
     const name = p.period?.textForecastName?.en || '';
     const night = /night/i.test(name);
-    const weekday = (p.period?.value?.en || name).match(/Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday/i)?.[0];
-    if (weekday) {
-      while (formatter('en-US', { timeZone: 'UTC', weekday: 'long' }).format(new Date(`${cur}T00:00:00Z`)).toLowerCase() !== weekday.toLowerCase()) cur = nextKey(cur);
-    }
-    if (!night && !weekday) {
+    if (!night) {
       const d = day(cur);
       if (d.hi != null || d.lo != null) cur = nextKey(cur);
     }
@@ -424,7 +274,7 @@ export function dayHeading(key, now, tz) {
   const tomorrowKey = t.toISOString().slice(0, 10);
   if (key === todayKey) return 'Today';
   if (key === tomorrowKey) return 'Tomorrow';
-  return formatter('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })
     .format(new Date(`${key}T00:00:00Z`));
 }
 
@@ -442,26 +292,17 @@ export function radarDelay(value, min, max) {
   return Number(max) + Number(min) - Number(value);
 }
 
-export async function pool(items, limit, fn, priority) {
+export async function pool(items, limit, fn) {
   const out = new Array(items.length);
-  const pending = items.map((_, i) => i);
+  let i = 0;
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (pending.length) {
-      let next = 0;
-      if (priority) {
-        for (let i = 1; i < pending.length; i++) {
-          if (priority(items[pending[i]], pending[i]) < priority(items[pending[next]], pending[next])) next = i;
-        }
-      }
-      const [k] = pending.splice(next, 1);
-      out[k] = await fn(items[k], k);
-    }
+    while (i < items.length) { const k = i++; out[k] = await fn(items[k], k); }
   }));
   return out;
 }
 
-export function skeletonCard() {
-  return '<article class="card skeleton" aria-hidden="true">'
+export function skeletonCards(n) {
+  const card = '<article class="card skeleton" aria-hidden="true">'
     + '<span class="sk sk-time"></span>'
     + '<span class="sk sk-emoji"></span>'
     + '<span class="sk sk-temp"></span>'
@@ -469,19 +310,13 @@ export function skeletonCard() {
     + '<dl class="card-stats">'
     + '<div><span class="sk sk-line"></span></div>'.repeat(4)
     + '</dl></article>';
-}
-
-export function skeletonCards(n) {
-  return `<div class="cards">${skeletonCard().repeat(n)}</div>`;
-}
-
-export function skeletonRow() {
-  return '<article class="hour-row skeleton" aria-hidden="true">'
-    + '<div class="hour-main"><span class="sk sk-time"></span></div>'
-    + '<div class="hour-stats"><span class="sk sk-line"></span></div>'
-    + '</article>';
+  return `<div class="cards">${card.repeat(n)}</div>`;
 }
 
 export function skeletonRows(n) {
-  return `<div class="hourly">${skeletonRow().repeat(n)}</div>`;
+  const row = '<article class="hour-row skeleton" aria-hidden="true">'
+    + '<div class="hour-main"><span class="sk sk-time"></span></div>'
+    + '<div class="hour-stats"><span class="sk sk-line"></span></div>'
+    + '</article>';
+  return `<div class="hourly">${row.repeat(n)}</div>`;
 }

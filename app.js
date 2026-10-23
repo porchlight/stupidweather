@@ -1,20 +1,14 @@
-import { REFRESH_MS, forecastTimes, forecastPriorities, forecastReadiness, skeletonCard, skeletonRow, precipitationHours, forecastView, pool, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo } from './logic.js';
-
-let activeTab = 'hourly';
-let paintActiveForecast = null;
+import { REFRESH_MS, forecastTimes, pool, aggregateWeek, aggregatePeriods, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
 
 export function switchTab(name) {
-  activeTab = name;
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
   document.querySelectorAll('nav button').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === name);
   });
   const section = document.getElementById('tab-' + name);
   if (section) section.hidden = false;
-  paintActiveForecast?.();
   window.scrollTo(0, 0);
   if (name === 'radar') window.dispatchEvent(new Event('radar-shown'));
-  else stopRadar();
 }
 
 let currentLocation = null;
@@ -22,16 +16,12 @@ let currentLocation = null;
 let refreshTimer = null;
 
 let refreshSeq = 0;
-let refreshController = null;
-let selectionController = null;
-let searchController = null;
 
 let onLocationChange = async (loc) => {
   clearInterval(refreshTimer);
   refreshTimer = null;
-  const selection = selectionController;
   await refreshAll(loc);
-  if (currentLocation !== loc || selectionController !== selection) return;
+  if (currentLocation !== loc) return;
   refreshTimer = setInterval(() => refreshAll(loc), REFRESH_MS);
 };
 
@@ -39,75 +29,45 @@ export async function refreshAll(loc) {
   const status = document.getElementById('status');
   if (!loc) { status.textContent = 'Search a city to begin.'; return; }
   const seq = ++refreshSeq;
-  paintActiveForecast = null;
-  refreshController?.abort();
-  const controller = refreshController = new AbortController();
-  const { signal } = controller;
-  const now = new Date();
-  const cached = loadCachedForecast(loc.lat + ',' + loc.lon);
-  let hours = cached?.hours || [];
-  let updated = cached?.ts;
+  const key = loc.lat + ',' + loc.lon;
+  const cached = loadCachedForecast(key);
+  let hours = cached ? cached.hours : null;
   const stale = !cached || Date.now() - cached.ts > REFRESH_MS;
-  renderForecast(hours, loc, now, cached ? null : { hours: new Set(), days: new Set() });
-  document.getElementById('lastUpdate').textContent = updated
-    ? `Updated ${clockTime(new Date(updated).toISOString(), loc.tz)} local` : '';
-  status.textContent = stale ? (cached ? 'Refreshing…' : 'Loading…') : '';
-  if (radarVisible()) refreshRadar(loc);
-  if (!stale) return;
-  let readiness = cached ? null : { hours: new Set(), days: new Set() };
-  let loading = true;
-  let lastHourly = '';
-  let lastPaint = 0;
-  let paintTimer = null;
-  const paint = () => {
-    if (seq !== refreshSeq || signal.aborted) return;
-    lastPaint = Date.now();
-    const view = forecastView(hours, null, loc.tz, now);
-    const signature = JSON.stringify([view.hours, readiness && [...readiness.hours]]);
-    if (activeTab === 'hourly' && signature !== lastHourly) {
-      renderHourly(view.hours, loc, readiness);
-      lastHourly = signature;
-    }
-    if (activeTab === 'week') renderWeek(view, readiness);
-    if (loading && (activeTab === 'hourly' || activeTab === 'week')) {
-      const ready = readiness == null || (activeTab === 'week'
-        ? view.days.every(d => readiness.days.has(d.date))
-        : view.hours.every(h => readiness.hours.has(Date.parse(h.time))));
-      status.textContent = ready ? '' : 'Loading…';
-    }
-  };
-  paintActiveForecast = paint;
-  const schedulePaint = () => {
-    if (paintTimer || signal.aborted) return;
-    paintTimer = setTimeout(() => { paintTimer = null; paint(); }, Math.max(0, 400 - (Date.now() - lastPaint)));
-  };
+  if (stale) {
+    showSkeleton();
+    status.textContent = 'Loading…';
+  }
   try {
-    hours = await fetchForecast(loc, (loaded, completed) => {
-      if (signal.aborted || seq !== refreshSeq || cached) return;
-      hours = loaded;
-      readiness = forecastReadiness(hours, completed, loc.tz);
-      schedulePaint();
-    }, signal, now);
-    if (signal.aborted || seq !== refreshSeq) return;
-    readiness = null;
-    loading = false;
-    clearTimeout(paintTimer);
-    paintTimer = null;
-    paint();
-    updated = Date.now();
-    writeForecast({ hours, ts: updated }, loc);
-    document.getElementById('lastUpdate').textContent = `Updated ${clockTime(new Date(updated).toISOString(), loc.tz)} local`;
+    let offline = false;
+    if (stale) {
+      let lastPaint = 0;
+      const res = await fetchForecast(loc, loaded => {
+        if (seq !== refreshSeq) return;
+        const now = Date.now();
+        if (now - lastPaint < 400) return;
+        lastPaint = now;
+        renderHourly(loaded, loc);
+      }).then(h => ({ hours: h }), e => ({ err: e }));
+      if (seq !== refreshSeq) return;
+      if (res.err) {
+        if (!hours) throw res.err;
+        offline = true;
+      } else {
+        hours = res.hours;
+      }
+    }
     status.textContent = '';
+    renderForecast(hours, loc);
+    document.getElementById('lastUpdate').textContent = `Updated ${clockTime(new Date().toISOString(), loc.tz)} local${offline ? ' (offline)' : ''}`;
+    await refreshRadar(loc);
   } catch (err) {
-    if (signal.aborted || seq !== refreshSeq) return;
-    loading = false;
-    clearTimeout(paintTimer);
-    paintTimer = null;
-    if (cached) { hours = cached.hours; readiness = null; }
-    paint();
-    status.textContent = cached ? 'Model update unavailable. Showing the last available forecast.' : 'Update failed: ' + err.message;
-  } finally {
-    clearTimeout(paintTimer);
+    if (seq !== refreshSeq) return;
+    status.textContent = 'Update failed: ' + err.message;
+    if (!hours) {
+      document.getElementById('tab-hourly').innerHTML = '';
+      document.getElementById('tab-week').innerHTML = '';
+    }
+    console.error(err);
   }
 }
 
@@ -138,14 +98,9 @@ function init() {
     const status = document.getElementById('status');
     status.textContent = 'Searching…';
     try {
-      searchController?.abort();
-      const controller = searchController = new AbortController();
-      const results = await searchPlaces(q, controller.signal);
-      if (controller.signal.aborted) return;
-      renderResults(results);
+      renderResults(await searchPlaces(q));
       status.textContent = '';
     } catch (err) {
-      if (err.name === 'AbortError') return;
       renderResults([]);
       status.textContent = err.message;
     }
@@ -164,7 +119,7 @@ function init() {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
     reg.update().catch(() => {});
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -175,21 +130,19 @@ if ('serviceWorker' in navigator) {
   }).catch(() => {});
 }
 
-async function request(url, signal, timeout = 12000) {
-  return fetch(url, { signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeout)]) });
-}
-
-export async function searchPlaces(query, signal) {
+export async function searchPlaces(query) {
   const search = new URLSearchParams({ format: 'json', limit: '5', q: query });
-  const res = await request('https://nominatim.openstreetmap.org/search?' + search, signal);
+  const res = await fetch('https://nominatim.openstreetmap.org/search?' + search, {
+    headers: { 'Accept': 'application/json' }
+  });
   if (!res.ok) throw new Error('Geocoding failed');
   const json = await res.json();
   if (!json.length) throw new Error('Location not found');
   return json.map(r => ({ lat: Number(r.lat), lon: Number(r.lon), name: r.display_name }));
 }
 
-export async function selectPlace(place, signal) {
-  const tres = await request(`https://timeapi.io/api/TimeZone/coordinate?latitude=${place.lat}&longitude=${place.lon}`, signal);
+export async function selectPlace(place) {
+  const tres = await fetch(`https://timeapi.io/api/TimeZone/coordinate?latitude=${place.lat}&longitude=${place.lon}`);
   const tjson = await tres.json().catch(() => null);
   if (!tres.ok || !tjson || !tjson.timeZone) throw new Error('Timezone lookup failed');
   return { name: place.name, lat: place.lat, lon: place.lon, tz: tjson.timeZone };
@@ -209,26 +162,13 @@ function renderResults(list) {
 }
 
 async function choosePlace(place) {
-  refreshController?.abort();
-  refreshSeq++;
-  clearInterval(refreshTimer);
-  refreshTimer = null;
-  selectionController?.abort();
-  searchController?.abort();
-  const controller = selectionController = new AbortController();
   const status = document.getElementById('status');
   status.textContent = 'Loading…';
   try {
-    const loc = await selectPlace(place, controller.signal);
-    if (controller.signal.aborted) return;
-    currentLocation = loc;
-    stopRadar();
-    radarFrames = [];
-    radarLocation = null;
-    radarOverlay?.setUrl('');
+    currentLocation = await selectPlace(place);
     document.body.classList.remove('landing');
     setLocationActive(true);
-    try { localStorage.setItem('sw:location', JSON.stringify(currentLocation)); } catch {}
+    localStorage.setItem('sw:location', JSON.stringify(currentLocation));
     document.getElementById('locationName').textContent = currentLocation.name;
     const box = document.getElementById('results');
     box.innerHTML = '';
@@ -237,20 +177,16 @@ async function choosePlace(place) {
     status.textContent = '';
     await onLocationChange(currentLocation);
   } catch (err) {
-    if (controller.signal.aborted) return;
     status.textContent = err.message;
-    if (currentLocation) refreshTimer = setInterval(() => refreshAll(currentLocation), REFRESH_MS);
+    console.error(err);
   }
 }
 
 function restoreLocation() {
+  const saved = localStorage.getItem('sw:location');
+  if (!saved) return null;
   try {
-    const saved = localStorage.getItem('sw:location');
-    if (!saved) return null;
-    const loc = JSON.parse(saved);
-    if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lon) || typeof loc.name !== 'string' || typeof loc.tz !== 'string') return null;
-    new Intl.DateTimeFormat('en', { timeZone: loc.tz }).format();
-    currentLocation = loc;
+    currentLocation = JSON.parse(saved);
     document.getElementById('locationName').textContent = currentLocation.name;
     setLocationActive(true);
     return currentLocation;
@@ -259,113 +195,78 @@ function restoreLocation() {
 
 const WMS = 'https://geo.weather.gc.ca/geomet';
 const LAYER_POP = 'GDPS-WEonG_15km_Precip-Prob';
-const LAYER_PCP = 'GDPS_15km_Precip-Accum';
+const LAYER_PCP = 'GDPS_15km_Precip-Accum1h';
 const LAYER_TEMP = 'GDPS_15km_AirTemp_2m';
 const LAYER_WIND = 'GDPS_15km_WindSpeed_10m';
 const LAYER_GUST = 'GDPS_15km_WindGust_10m';
 const LAYER_CLOUD = 'GDPS_15km_TotalCloudCover';
 const LAYER_TSTORM = 'GDPS-WEonG_15km_Thunderstorm-Prob';
-const FORECAST_VER = '6';
-const FORECAST_LAYERS = [LAYER_POP, LAYER_PCP, LAYER_TEMP, LAYER_WIND, LAYER_GUST, LAYER_CLOUD, LAYER_TSTORM];
-let metadataCache = null;
+const FORECAST_VER = '4';
 
-async function layerMetadata() {
-  if (metadataCache && Date.now() - metadataCache.ts < REFRESH_MS) return metadataCache.promise;
-  const promise = pool(FORECAST_LAYERS, 4, async layer => {
-    try {
-      const p = new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetCapabilities', layer });
-      const res = await request(`${WMS}?${p}`, null, 8000);
-      if (!res.ok) return null;
-      const xml = new DOMParser().parseFromString(await res.text(), 'application/xml');
-      const node = [...xml.getElementsByTagName('Layer')].find(el => [...el.children].some(c => c.localName === 'Name' && c.textContent === layer));
-      const dimensions = [...(node?.children || [])].filter(c => c.localName === 'Dimension');
-      const time = dimensions.find(d => d.getAttribute('name') === 'time');
-      const run = dimensions.find(d => d.getAttribute('name') === 'reference_time')?.getAttribute('default');
-      if (!time || !run) return null;
-      const times = new Set();
-      for (const value of time.textContent.split(',')) {
-        if (!value.includes('/')) {
-          const t = Date.parse(value);
-          if (Number.isFinite(t)) times.add(t);
-          continue;
-        }
-        const [from, to, step] = value.split('/');
-        const match = step.match(/^PT(?:(\d+)H)?(?:(\d+)M)?$/);
-        const ms = match && (Number(match[1] || 0) * 3600e3 + Number(match[2] || 0) * 60e3);
-        if (ms) for (let t = Date.parse(from); t <= Date.parse(to); t += ms) times.add(t);
-      }
-      return { times, run };
-    } catch { return null; }
-  });
-  metadataCache = { ts: Date.now(), promise };
-  return promise;
-}
-
-async function pointValue(layer, loc, time, metadata, signal) {
-  if (!metadata?.times.has(Date.parse(time))) return null;
+async function pointValue(layer, lat, lon, time) {
   const d = 0.2;
   const p = new URLSearchParams({
     SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo',
     LAYERS: layer, QUERY_LAYERS: layer, CRS: 'EPSG:4326',
-    BBOX: `${loc.lat - d},${loc.lon - d},${loc.lat + d},${loc.lon + d}`,
+    BBOX: `${lat - d},${lon - d},${lat + d},${lon + d}`,
     WIDTH: '101', HEIGHT: '101', I: '50', J: '50',
-    INFO_FORMAT: 'application/json', TIME: time.replace(/\.\d+Z$/, 'Z'),
-    DIM_REFERENCE_TIME: metadata.run, STYLES: ''
+    INFO_FORMAT: 'application/json', TIME: time.replace(/\.\d+Z$/, 'Z'), STYLES: ''
   });
-  const res = await request(`${WMS}?${p}`, signal, 8000);
+  const res = await fetch(`${WMS}?${p}`);
   if (!res.ok) throw new Error('WMS ' + res.status);
   const json = await res.json();
-  const value = json.features?.[0]?.properties?.value;
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const f = json.features && json.features[0];
+  return f && typeof f.properties.value === 'number' ? f.properties.value : null;
 }
 
-export async function fetchForecast(loc, onProgress, signal, now = new Date()) {
-  const slots = forecastTimes(now);
-  const times = [new Date(Date.parse(slots[0]) - 3600e3).toISOString(), ...slots];
-  const metadata = await layerMetadata();
-  signal?.throwIfAborted();
-  const hours = times.map(time => ({ time, pop: null, precip: null, precipTotal: null, temp: null, wind: null, gust: null, cloud: null, tstorm: null }));
-  const fields = ['pop', 'precipTotal', 'temp', 'wind', 'gust', 'cloud', 'tstorm'];
-  const tasks = times.flatMap((time, i) => fields.flatMap((field, j) => i === 0 && j !== 1 ? [] : [{ time, i, field, j }]));
-  const priorities = {
-    hourly: forecastPriorities(hours, loc.tz, 'hourly'),
-    week: forecastPriorities(hours, loc.tz, 'week')
-  };
-  const done = times.map(() => 0);
-  await pool(tasks, 6, async ({ time, i, field, j }) => {
-    signal?.throwIfAborted();
-    try { hours[i][field] = await pointValue(FORECAST_LAYERS[j], loc, time, metadata[j], signal); }
-    catch { signal?.throwIfAborted(); }
-    done[i]++;
-    if (done[i] === (i === 0 ? 1 : fields.length) && onProgress) {
-      const completed = new Set(done.flatMap((count, k) => count === (k === 0 ? 1 : fields.length) ? [k] : []));
-      onProgress(precipitationHours(hours), completed);
-    }
-  }, task => priorities[activeTab === 'week' ? 'week' : 'hourly'][task.i]);
-  signal?.throwIfAborted();
-  if (!hours.some(h => h.temp != null)) throw new Error('Forecast data unavailable');
-  return precipitationHours(hours);
+function loadedPrefix(hours) {
+  const hole = hours.findIndex(h => !h);
+  return hours.slice(0, hole === -1 ? hours.length : hole);
 }
 
+export async function fetchForecast(loc, onProgress) {
+  const times = forecastTimes(new Date());
+  const hours = new Array(times.length);
+  let anyData = false;
+  await pool(times, 4, async (time, i) => {
+    const [pop, precip, temp, wind, gust, cloud, tstorm] = await Promise.all([
+      pointValue(LAYER_POP, loc.lat, loc.lon, time),
+      pointValue(LAYER_PCP, loc.lat, loc.lon, time),
+      pointValue(LAYER_TEMP, loc.lat, loc.lon, time),
+      pointValue(LAYER_WIND, loc.lat, loc.lon, time),
+      pointValue(LAYER_GUST, loc.lat, loc.lon, time),
+      pointValue(LAYER_CLOUD, loc.lat, loc.lon, time),
+      pointValue(LAYER_TSTORM, loc.lat, loc.lon, time)
+    ].map(p => p.catch(() => null)));
+    if (pop != null || precip != null || temp != null || wind != null
+        || gust != null || cloud != null || tstorm != null) anyData = true;
+    hours[i] = { time, pop: pop ?? 0, precip: precip ?? 0, temp, wind, gust, cloud, tstorm };
+    if (onProgress) onProgress(loadedPrefix(hours));
+  });
+  if (!anyData) throw new Error('Forecast data unavailable');
+  writeForecast(hours, loc);
+  return hours;
+}
 
-function writeForecast(entry, loc) {
-  try {
-    let all = {};
-    try { all = JSON.parse(localStorage.getItem('sw:forecasts') || '{}'); } catch {}
-    if (!all || typeof all !== 'object' || Array.isArray(all) || localStorage.getItem('sw:forecastVer') !== FORECAST_VER) all = {};
-    all[loc.lat + ',' + loc.lon] = entry;
-    const keys = Object.keys(all).sort((a, b) => all[b].ts - all[a].ts);
-    for (const k of keys.slice(5)) delete all[k];
-    localStorage.setItem('sw:forecastVer', FORECAST_VER);
-    localStorage.setItem('sw:forecasts', JSON.stringify(all));
-  } catch {}
+function writeForecast(hours, loc) {
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem('sw:forecasts') || '{}'); } catch {}
+  if (localStorage.getItem('sw:forecastVer') !== FORECAST_VER) all = {};
+  all[loc.lat + ',' + loc.lon] = { ts: Date.now(), hours };
+  const keys = Object.keys(all);
+  if (keys.length > 5) {
+    keys.sort((a, b) => all[a].ts - all[b].ts);
+    for (const k of keys.slice(0, keys.length - 5)) delete all[k];
+  }
+  localStorage.setItem('sw:forecastVer', FORECAST_VER);
+  localStorage.setItem('sw:forecasts', JSON.stringify(all));
 }
 
 function loadCachedForecast(key) {
+  if (localStorage.getItem('sw:forecastVer') !== FORECAST_VER) return null;
   try {
-    if (localStorage.getItem('sw:forecastVer') !== FORECAST_VER) return null;
-    const entry = JSON.parse(localStorage.getItem('sw:forecasts') || '{}')?.[key];
-    return entry && Number.isFinite(entry.ts) && Array.isArray(entry.hours) ? entry : null;
+    const entry = JSON.parse(localStorage.getItem('sw:forecasts') || '{}')[key];
+    return entry && entry.hours ? entry : null;
   } catch { return null; }
 }
 
@@ -374,15 +275,14 @@ function layersHtml(temp) {
   return icon ? `<span class="layers">${icon}</span>` : '';
 }
 
-function hourlyList(hours, loc, readiness) {
+function hourlyList(hours, loc) {
   const groups = groupByDay(hours.slice(0, 12), loc.tz);
   const now = new Date();
   const blocks = groups.map(g => {
     const head = `<h3 class="hour-head">${dayHeading(g.date, now, loc.tz)}</h3>`;
     const rows = g.hours.map(h => {
-      if (readiness && !readiness.hours.has(Date.parse(h.time))) return skeletonRow();
       const night = isNight(h.time, loc.tz);
-      const cond = h.cond ?? conditionWord(h.cloud, h.tstorm, h.temp, h.precipRate ?? h.precip, h.wind, night);
+      const cond = h.cond ?? conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind, night);
       const feels = windChill(h.temp, h.wind);
       const feelsHtml = feels != null && Math.round(feels) !== Math.round(h.temp)
         ? `<span class="hour-feels">Feels like: ${fmtTemp(feels)}</span>` : '';
@@ -408,9 +308,8 @@ function hourlyList(hours, loc, readiness) {
   return `<div class="hourly">${blocks}</div>`;
 }
 
-function weekCards(days, periods, readiness) {
+function weekCards(days, periods) {
   const cards = days.map(d => {
-    if (readiness && !readiness.days.has(d.date)) return skeletonCard();
     const cond = d.cond ?? '–';
     const feelsHtml = d.feels != null && Math.round(d.feels) !== Math.round(d.hi)
       ? `<div class="card-feels">Feels like: ${fmtTemp(d.feels)}</div>` : '';
@@ -424,8 +323,8 @@ function weekCards(days, periods, readiness) {
           + `<span>${fmtHiLo(p.hi, p.lo)}</span>`
           + `</div>`
           + `<div class="period-stats">`
-          + `<span>POP ${p.pop == null ? '–' : Math.round(p.pop) + '%'}</span>`
-          + `<span>${p.precip == null ? '–' : p.precip.toFixed(1)} mm</span>`
+          + `<span>POP ${Math.round(p.pop)}%</span>`
+          + `<span>${p.precip.toFixed(1)} mm</span>`
           + `<span>wind ${fmtKmh(p.wind)} km/h</span>`
           + `<span>gust ${fmtKmh(p.gust)} km/h</span>`
           + `</div>`
@@ -451,47 +350,20 @@ function weekCards(days, periods, readiness) {
   return `<div class="cards">${cards}</div>`;
 }
 
-function updateMarkup(element, html) {
-  const template = document.createElement('template');
-  template.innerHTML = html;
-  const patch = (target, source) => {
-    for (let i = 0; i < source.childNodes.length; i++) {
-      const next = source.childNodes[i];
-      const old = target.childNodes[i];
-      if (!old) { target.appendChild(next.cloneNode(true)); continue; }
-      if (old.nodeType !== next.nodeType || old.nodeName !== next.nodeName) {
-        old.replaceWith(next.cloneNode(true));
-      } else if (next.nodeType === Node.TEXT_NODE) {
-        if (old.nodeValue !== next.nodeValue) old.nodeValue = next.nodeValue;
-      } else if (next.nodeType === Node.ELEMENT_NODE) {
-        for (const attr of [...old.attributes]) {
-          if (attr.name === 'open' && old.tagName === 'DETAILS') continue;
-          if (!next.hasAttribute(attr.name)) old.removeAttribute(attr.name);
-        }
-        for (const attr of [...next.attributes]) {
-          if (old.getAttribute(attr.name) !== attr.value) old.setAttribute(attr.name, attr.value);
-        }
-        patch(old, next);
-      }
-    }
-    while (target.childNodes.length > source.childNodes.length) target.lastChild.remove();
-  };
-  patch(element, template.content);
+function showSkeleton() {
+  document.getElementById('tab-hourly').innerHTML = skeletonRows(12);
+  document.getElementById('tab-week').innerHTML = skeletonCards(8);
 }
 
-function renderHourly(hours, loc, readiness) {
-  updateMarkup(document.getElementById('tab-hourly'), hourlyList(hours, loc, readiness));
+function renderHourly(hours, loc) {
+  document.getElementById('tab-hourly').innerHTML = hourlyList(hours, loc);
 }
 
-function renderWeek(view, readiness) {
-  updateMarkup(document.getElementById('tab-week'), weekCards(view.days, view.periods, readiness)
-    + `<p class="note">POP = sampled max. Precip totals are estimated between model times; today covers the remaining hours.</p>`);
-}
-
-export function renderForecast(hours, loc, now = new Date(), readiness = null) {
-  const view = forecastView(hours, null, loc.tz, now);
-  renderHourly(view.hours, loc, readiness);
-  renderWeek(view, readiness);
+export function renderForecast(hours, loc) {
+  renderHourly(hours, loc);
+  const days = aggregateWeek(hours, loc.tz);
+  const periods = aggregatePeriods(hours, loc.tz);
+  document.getElementById('tab-week').innerHTML = weekCards(days, periods) + '<p class="note">POP = daily max, precip = daily total.</p>';
 }
 
 const RADAR_LAYER = 'RADAR_1KM_RRAI';
@@ -519,41 +391,6 @@ function radarFrameUrl(time, bounds, layer = RADAR_LAYER) {
   return `${WMS}?${p}`;
 }
 
-function radarVisible() {
-  return !document.getElementById('tab-radar').hidden && !document.hidden;
-}
-
-let leafletPromise = null;
-let radarController = null;
-let radarLocation = null;
-let radarLoadedAt = 0;
-let radarPendingBounds = null;
-
-function loadLeaflet() {
-  if (typeof L !== 'undefined') return Promise.resolve();
-  if (leafletPromise) return leafletPromise;
-  leafletPromise = new Promise((resolve, reject) => {
-    const css = document.createElement('link');
-    css.rel = 'stylesheet';
-    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    const timeout = setTimeout(() => finish(new Error('Radar library timed out')), 12000);
-    let loaded = 0;
-    const finish = error => {
-      if (!error && ++loaded < 2) return;
-      clearTimeout(timeout);
-      css.onload = script.onload = css.onerror = script.onerror = null;
-      if (error) { css.remove(); script.remove(); leafletPromise = null; reject(error); }
-      else resolve();
-    };
-    css.onload = script.onload = () => finish();
-    css.onerror = script.onerror = () => finish(new Error('Radar library unavailable'));
-    document.head.append(css, script);
-  });
-  return leafletPromise;
-}
-
 export function initRadar(loc) {
   if (radarMap) return;
   radarMap = L.map('radarMap').setView([loc.lat, loc.lon], 7);
@@ -569,91 +406,52 @@ export function initRadar(loc) {
   document.getElementById('frameSlider').addEventListener('input', e => { pauseRadar(); showFrame(Number(e.target.value)); });
 }
 
-function loadRadarFrame(frame, signal) {
-  return new Promise(resolve => {
-    const img = new Image();
-    let finished = false;
-    const finish = value => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timeout);
-      signal.removeEventListener('abort', abort);
-      img.onload = img.onerror = null;
-      if (!value) img.src = '';
-      resolve(value);
-    };
-    const abort = () => finish(null);
-    const timeout = setTimeout(abort, 12000);
-    signal.addEventListener('abort', abort, { once: true });
-    if (signal.aborted) { abort(); return; }
-    img.onload = () => finish(frame);
-    img.onerror = abort;
-    img.src = frame.url;
-  });
-}
-
 export async function refreshRadar(loc, opts = {}) {
-  if (!radarVisible()) return;
-  radarController?.abort();
-  const controller = radarController = new AbortController();
-  const { signal } = controller;
+  if (typeof L === 'undefined') return;
+  const seq = refreshSeq;
   const mine = ++radarSeq;
+  initRadar(loc);
+  if (opts.recenter !== false) {
+    radarMap.setView([loc.lat, loc.lon]);
+    if (radarMarker) radarMarker.setLatLng([loc.lat, loc.lon]);
+  }
+  if (radarMap.getSize().x === 0) { radarFrames = []; return; }
+  const bounds = radarMap.getBounds();
+  radarBounds = bounds;
   const mapEl = document.getElementById('radarMap');
   mapEl.classList.add('loading');
-  pauseRadar();
-  try {
-    await loadLeaflet();
-    if (signal.aborted || !radarVisible() || currentLocation !== loc) return;
-    initRadar(loc);
-    radarMap.invalidateSize();
-    if (opts.recenter !== false) {
-      radarMap.setView([loc.lat, loc.lon]);
-      radarMarker.setLatLng([loc.lat, loc.lon]);
-    }
-    if (!radarMap.getSize().x || !radarMap.getSize().y) return;
-    const bounds = radarMap.getBounds();
-    radarPendingBounds = bounds;
-    const frames = radarTimes(new Date(), 10, 9).map(time => ({
-      time, url: radarFrameUrl(time, bounds, Date.parse(time) > Date.now() ? RADAR_FORECAST_LAYER : RADAR_LAYER)
-    }));
-    const loaded = await pool(frames, 4, frame => signal.aborted ? null : loadRadarFrame(frame, signal));
-    if (signal.aborted || mine !== radarSeq || !radarVisible()) return;
-    const kept = loaded.filter(Boolean);
-    if (!kept.length) throw new Error('Radar images unavailable');
-    radarFrames = kept;
-    radarBounds = bounds;
-    radarLocation = loc;
-    radarLoadedAt = Date.now();
-    document.getElementById('frameSlider').max = String(kept.length - 1);
-    showFrame(Math.max(0, kept.findLastIndex(f => Date.parse(f.time) <= Date.now())));
-    playRadar();
-  } catch (err) {
-    if (!signal.aborted && mine === radarSeq) document.getElementById('status').textContent = err.message;
-  } finally {
-    if (mine === radarSeq) {
-      radarPendingBounds = null;
-      mapEl.classList.remove('loading');
-    }
-  }
+  const times = radarTimes(new Date(), 10, 9);
+  const frames = await pool(times, 6, async (time) => {
+    const future = Date.parse(time) > Date.now();
+    const url = radarFrameUrl(time, bounds, future ? RADAR_FORECAST_LAYER : RADAR_LAYER);
+    return { time, url };
+  });
+  if (seq !== refreshSeq || mine !== radarSeq) { mapEl.classList.remove('loading'); return; }
+  const loaded = await Promise.all(frames.map(f => new Promise(r => {
+    const i = new Image();
+    i.onload = () => r(f);
+    i.onerror = () => r(null);
+    i.src = f.url;
+  })));
+  if (seq !== refreshSeq || mine !== radarSeq) { mapEl.classList.remove('loading'); return; }
+  const kept = loaded.filter(Boolean);
+  radarFrames = kept.length ? kept : frames;
+  const slider = document.getElementById('frameSlider');
+  slider.max = String(radarFrames.length - 1);
+  slider.value = '0';
+  showFrame(radarFrames.length - 1);
+  mapEl.classList.remove('loading');
+  playRadar();
 }
 
-// ponytail: each pan loads 19 full-map images; use viewport-driven WMS tiles if radar traffic grows
+// ponytail: refetches all ~39 full-map frames per pan (heavy on the live WMS); move to a viewport-driven L.tileLayer.wms if that bites
 function onRadarMove() {
   clearTimeout(radarMoveTimer);
   radarMoveTimer = setTimeout(() => {
-    if (!currentLocation || !radarVisible()) return;
-    const bounds = radarPendingBounds || radarBounds;
-    if (bounds && radarMap.getBounds().equals(bounds)) return;
+    if (!currentLocation) return;
+    if (radarBounds && radarMap.getBounds().equals(radarBounds)) return;
     refreshRadar(currentLocation, { recenter: false });
   }, 400);
-}
-
-function stopRadar() {
-  pauseRadar();
-  clearTimeout(radarMoveTimer);
-  radarController?.abort();
-  radarPendingBounds = null;
-  document.getElementById('radarMap').classList.remove('loading');
 }
 
 function showFrame(i) {
@@ -667,7 +465,7 @@ function showFrame(i) {
 }
 
 function playRadar() {
-  if (!radarVisible() || radarTimer || radarFrames.length < 2) return;
+  if (radarTimer || radarFrames.length < 2) return;
   const el = document.getElementById('speedInput');
   radarTimer = setInterval(() => {
     if (radarIndex >= radarFrames.length - 1) radarIndex = -1;
@@ -681,14 +479,11 @@ function pauseRadar() {
 }
 
 window.addEventListener('radar-shown', () => {
-  if (!currentLocation) return;
-  radarMap?.invalidateSize();
-  if (radarFrames.length && radarLocation === currentLocation && radarBounds?.equals(radarMap.getBounds()) && Date.now() - radarLoadedAt < REFRESH_MS) playRadar();
-  else refreshRadar(currentLocation);
+  if (!radarMap) return;
+  setTimeout(() => {
+    radarMap.invalidateSize();
+    if (!radarFrames.length && currentLocation) refreshRadar(currentLocation);
+  }, 0);
 });
-window.addEventListener('resize', () => { if (radarMap && radarVisible()) radarMap.invalidateSize(); });
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) stopRadar();
-  else if (radarVisible() && currentLocation) window.dispatchEvent(new Event('radar-shown'));
-});
+window.addEventListener('resize', () => { if (radarMap) radarMap.invalidateSize(); });
 init();
