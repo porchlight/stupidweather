@@ -267,6 +267,14 @@ export function groupByDay(hours, tz) {
   return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export function forecastDayProgress(hours, times, tz) {
+  const loaded = new Map(hours.map(h => [h.time, h]));
+  return groupByDay(times.map(time => ({ time })), tz).map(g => ({
+    date: g.date,
+    hours: g.hours.every(h => loaded.has(h.time)) ? g.hours.map(h => loaded.get(h.time)) : null
+  }));
+}
+
 export function dayHeading(key, now, tz) {
   const todayKey = dateKey(now.toISOString(), tz);
   const t = new Date(`${todayKey}T00:00:00Z`);

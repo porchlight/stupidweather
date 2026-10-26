@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, layerIcon, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast, aggregatePeriods } from './logic.js';
+import { tzParts, dateKey, forecastTimes, forecastDayProgress, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, layerIcon, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast, aggregatePeriods } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -308,5 +308,34 @@ assert.deepEqual(periods.get('2026-10-15'),
   [{ key: 'afternoon', label: 'Afternoon', pop: 30, precip: 4, hi: 14, lo: 14, wind: 8, gust: null, cond: 'Thunderstorm', feels: null }]);
 // no hours at all -> empty map
 assert.equal(aggregatePeriods([], 'America/Toronto').size, 0);
+
+const progressiveTimes = forecastTimes(new Date('2026-10-31T17:30:00Z'));
+const progressiveHours = progressiveTimes.map((time, i) => ({
+  time, temp: i % 17 - 4, pop: i % 4 * 20, precip: i % 3 / 10,
+  cloud: i % 3 * 40, tstorm: i % 5 * 10, wind: i % 8, gust: i % 9
+}));
+for (const tz of ['America/Toronto', 'Asia/Kolkata', 'Pacific/Kiritimati', 'America/Los_Angeles']) {
+  const expectedDays = aggregateWeek(progressiveHours, tz);
+  const expectedPeriods = aggregatePeriods(progressiveHours, tz);
+  for (let count = 0; count <= progressiveHours.length; count++) {
+    const loaded = progressiveHours.slice(0, count);
+    const progress = forecastDayProgress(loaded, progressiveTimes, tz);
+    assert.deepEqual(progress.map(g => g.date), expectedDays.map(d => d.date));
+    for (const g of progress) {
+      const scheduled = progressiveHours.filter(h => dateKey(h.time, tz) === g.date);
+      const ready = scheduled.every(h => loaded.includes(h));
+      assert.equal(g.hours !== null, ready);
+      if (ready) {
+        assert.deepEqual(aggregateWeek(g.hours, tz), expectedDays.filter(d => d.date === g.date));
+        assert.deepEqual(aggregatePeriods(g.hours, tz).get(g.date), expectedPeriods.get(g.date));
+      }
+    }
+  }
+  const firstDay = groupByDay(progressiveHours, tz)[0];
+  const withHole = progressiveHours.filter(h => h !== firstDay.hours[0]);
+  assert.equal(forecastDayProgress(withHole, progressiveTimes, tz)[0].hours, null);
+  assert.ok(forecastDayProgress(progressiveHours, progressiveTimes, tz).every(g => g.hours));
+}
+assert.deepEqual(forecastDayProgress([], [], 'UTC'), []);
 
 console.log('selfcheck OK');

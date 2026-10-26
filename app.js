@@ -1,12 +1,17 @@
-import { REFRESH_MS, forecastTimes, pool, aggregateWeek, aggregatePeriods, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
+import { REFRESH_MS, forecastTimes, forecastDayProgress, pool, aggregateWeek, aggregatePeriods, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
+
+let activeTab = 'hourly';
+let paintLoadingView = null;
 
 export function switchTab(name) {
+  activeTab = name;
   document.querySelectorAll('.tab').forEach(el => { el.hidden = true; });
   document.querySelectorAll('nav button').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === name);
   });
   const section = document.getElementById('tab-' + name);
   if (section) section.hidden = false;
+  paintLoadingView?.();
   window.scrollTo(0, 0);
   if (name === 'radar') window.dispatchEvent(new Event('radar-shown'));
 }
@@ -29,45 +34,72 @@ export async function refreshAll(loc) {
   const status = document.getElementById('status');
   if (!loc) { status.textContent = 'Search a city to begin.'; return; }
   const seq = ++refreshSeq;
+  paintLoadingView = null;
   const key = loc.lat + ',' + loc.lon;
-  const cached = loadCachedForecast(key);
+  let cached = loadCachedForecast(key);
   let hours = cached ? cached.hours : null;
   const stale = !cached || Date.now() - cached.ts > REFRESH_MS;
   if (stale) {
     showSkeleton();
     status.textContent = 'Loading…';
   }
+  let paintTimer = null;
   try {
     let offline = false;
     if (stale) {
       let lastPaint = 0;
-      const res = await fetchForecast(loc, loaded => {
+      let progress = [];
+      let times = [];
+      const paint = () => {
         if (seq !== refreshSeq) return;
-        const now = Date.now();
-        if (now - lastPaint < 400) return;
-        lastPaint = now;
-        renderHourly(loaded, loc);
+        clearTimeout(paintTimer);
+        paintTimer = null;
+        lastPaint = Date.now();
+        if (activeTab === 'hourly' && progress.length) renderHourly(progress, loc);
+        if (activeTab === 'week') renderWeekProgress(progress, times, loc);
+      };
+      paintLoadingView = paint;
+      const res = await fetchForecast(loc, (loaded, scheduled) => {
+        if (seq !== refreshSeq) return;
+        progress = loaded;
+        times = scheduled;
+        if (paintTimer === null) {
+          paintTimer = setTimeout(paint, Math.max(0, 400 - (Date.now() - lastPaint)));
+        }
       }).then(h => ({ hours: h }), e => ({ err: e }));
       if (seq !== refreshSeq) return;
+      clearTimeout(paintTimer);
+      paintTimer = null;
+      paintLoadingView = null;
       if (res.err) {
         if (!hours) throw res.err;
         offline = true;
       } else {
         hours = res.hours;
+        cached = loadCachedForecast(key);
       }
     }
     status.textContent = '';
-    renderForecast(hours, loc);
-    document.getElementById('lastUpdate').textContent = `Updated ${clockTime(new Date().toISOString(), loc.tz)} local${offline ? ' (offline)' : ''}`;
+    if (stale && !offline) {
+      renderHourly(hours, loc);
+      renderWeekProgress(hours, hours.map(h => h.time), loc);
+      document.getElementById('tab-week').insertAdjacentHTML('beforeend', '<p class="note">POP = daily max, precip = daily total.</p>');
+    } else {
+      renderForecast(hours, loc);
+    }
+    document.getElementById('lastUpdate').textContent = `Updated ${clockTime(new Date(cached.ts).toISOString(), loc.tz)} local${offline ? ' (offline)' : ''}`;
     await refreshRadar(loc);
   } catch (err) {
     if (seq !== refreshSeq) return;
+    paintLoadingView = null;
     status.textContent = 'Update failed: ' + err.message;
     if (!hours) {
       document.getElementById('tab-hourly').innerHTML = '';
       document.getElementById('tab-week').innerHTML = '';
     }
     console.error(err);
+  } finally {
+    clearTimeout(paintTimer);
   }
 }
 
@@ -228,6 +260,7 @@ export async function fetchForecast(loc, onProgress) {
   const times = forecastTimes(new Date());
   const hours = new Array(times.length);
   let anyData = false;
+  if (onProgress) onProgress([], times);
   await pool(times, 4, async (time, i) => {
     const [pop, precip, temp, wind, gust, cloud, tstorm] = await Promise.all([
       pointValue(LAYER_POP, loc.lat, loc.lon, time),
@@ -241,7 +274,7 @@ export async function fetchForecast(loc, onProgress) {
     if (pop != null || precip != null || temp != null || wind != null
         || gust != null || cloud != null || tstorm != null) anyData = true;
     hours[i] = { time, pop: pop ?? 0, precip: precip ?? 0, temp, wind, gust, cloud, tstorm };
-    if (onProgress) onProgress(loadedPrefix(hours));
+    if (onProgress) onProgress(loadedPrefix(hours), times);
   });
   if (!anyData) throw new Error('Forecast data unavailable');
   writeForecast(hours, loc);
@@ -308,46 +341,47 @@ function hourlyList(hours, loc) {
   return `<div class="hourly">${blocks}</div>`;
 }
 
+function weekCard(d, periods) {
+  const cond = d.cond ?? '–';
+  const feelsHtml = d.feels != null && Math.round(d.feels) !== Math.round(d.hi)
+    ? `<div class="card-feels">Feels like: ${fmtTemp(d.feels)}</div>` : '';
+  const rows = periods.get(d.date);
+  const detailsHtml = rows && rows.length
+    ? `<details class="card-details"><summary>Details</summary>`
+      + rows.map(p => `<div class="period-row">`
+        + `<div class="period-head">`
+        + `<span class="period-name">${p.label}</span>`
+        + `<span>${p.cond ? conditionEmoji(p.cond) : '–'}</span>`
+        + `<span>${fmtHiLo(p.hi, p.lo)}</span>`
+        + `</div>`
+        + `<div class="period-stats">`
+        + `<span>POP ${Math.round(p.pop)}%</span>`
+        + `<span>${p.precip.toFixed(1)} mm</span>`
+        + `<span>wind ${fmtKmh(p.wind)} km/h</span>`
+        + `<span>gust ${fmtKmh(p.gust)} km/h</span>`
+        + `</div>`
+        + layersHtml(p.hi)
+        + `</div>`).join('')
+      + `</details>`
+    : '';
+  return `<article class="card">`
+    + `<h3 class="card-time">${weekLabel(d.date)}</h3>`
+    + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
+    + `<div class="card-temp">${fmtHiLo(d.hi, d.lo)}</div>`
+    + feelsHtml
+    + `<div class="card-layers">${layersHtml(d.hi)}</div>`
+    + `<dl class="card-stats">`
+    + `<div><dt>POP</dt><dd>${d.pop == null ? '–' : Math.round(d.pop) + '%'}</dd></div>`
+    + `<div><dt>Precip (mm)</dt><dd>${d.precip == null ? '–' : d.precip.toFixed(1)}</dd></div>`
+    + `<div><dt>Wind (km/h)</dt><dd>${fmtKmh(d.wind)}</dd></div>`
+    + `<div><dt>Gust (km/h)</dt><dd>${fmtKmh(d.gust)}</dd></div>`
+    + `</dl>`
+    + detailsHtml
+    + `</article>`;
+}
+
 function weekCards(days, periods) {
-  const cards = days.map(d => {
-    const cond = d.cond ?? '–';
-    const feelsHtml = d.feels != null && Math.round(d.feels) !== Math.round(d.hi)
-      ? `<div class="card-feels">Feels like: ${fmtTemp(d.feels)}</div>` : '';
-    const rows = periods.get(d.date);
-    const detailsHtml = rows && rows.length
-      ? `<details class="card-details"><summary>Details</summary>`
-        + rows.map(p => `<div class="period-row">`
-          + `<div class="period-head">`
-          + `<span class="period-name">${p.label}</span>`
-          + `<span>${p.cond ? conditionEmoji(p.cond) : '–'}</span>`
-          + `<span>${fmtHiLo(p.hi, p.lo)}</span>`
-          + `</div>`
-          + `<div class="period-stats">`
-          + `<span>POP ${Math.round(p.pop)}%</span>`
-          + `<span>${p.precip.toFixed(1)} mm</span>`
-          + `<span>wind ${fmtKmh(p.wind)} km/h</span>`
-          + `<span>gust ${fmtKmh(p.gust)} km/h</span>`
-          + `</div>`
-          + layersHtml(p.hi)
-          + `</div>`).join('')
-        + `</details>`
-      : '';
-    return `<article class="card">`
-      + `<h3 class="card-time">${weekLabel(d.date)}</h3>`
-      + `<div class="card-emoji">${conditionEmoji(cond)}</div>`
-      + `<div class="card-temp">${fmtHiLo(d.hi, d.lo)}</div>`
-      + feelsHtml
-      + `<div class="card-layers">${layersHtml(d.hi)}</div>`
-      + `<dl class="card-stats">`
-      + `<div><dt>POP</dt><dd>${d.pop == null ? '–' : Math.round(d.pop) + '%'}</dd></div>`
-      + `<div><dt>Precip (mm)</dt><dd>${d.precip == null ? '–' : d.precip.toFixed(1)}</dd></div>`
-      + `<div><dt>Wind (km/h)</dt><dd>${fmtKmh(d.wind)}</dd></div>`
-      + `<div><dt>Gust (km/h)</dt><dd>${fmtKmh(d.gust)}</dd></div>`
-      + `</dl>`
-      + detailsHtml
-      + `</article>`;
-  }).join('');
-  return `<div class="cards">${cards}</div>`;
+  return `<div class="cards">${days.map(d => weekCard(d, periods)).join('')}</div>`;
 }
 
 function showSkeleton() {
@@ -357,6 +391,21 @@ function showSkeleton() {
 
 function renderHourly(hours, loc) {
   document.getElementById('tab-hourly').innerHTML = hourlyList(hours, loc);
+}
+
+function renderWeekProgress(hours, times, loc) {
+  const groups = forecastDayProgress(hours, times, loc.tz);
+  const section = document.getElementById('tab-week');
+  if (section.querySelector('.cards')?.children.length !== groups.length) {
+    section.innerHTML = skeletonCards(groups.length);
+  }
+  const cards = section.querySelector('.cards');
+  groups.forEach((g, i) => {
+    if (!g.hours || !cards.children[i].classList.contains('skeleton')) return;
+    const day = aggregateWeek(g.hours, loc.tz);
+    const periods = aggregatePeriods(g.hours, loc.tz);
+    cards.children[i].outerHTML = weekCard(day[0], periods);
+  });
 }
 
 export function renderForecast(hours, loc) {
