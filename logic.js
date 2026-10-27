@@ -206,10 +206,10 @@ export function aggregateWeek(hours, tz) {
 }
 
 const PERIODS = [
-  { key: 'overnight', label: 'Overnight', from: 0, to: 6 },
   { key: 'morning', label: 'Morning', from: 6, to: 12 },
   { key: 'afternoon', label: 'Afternoon', from: 12, to: 18 },
-  { key: 'evening', label: 'Evening', from: 18, to: 24 }
+  { key: 'evening', label: 'Evening', from: 18, to: 24 },
+  { key: 'overnight', label: 'Overnight', from: 0, to: 6 }
 ];
 
 export function aggregatePeriods(hours, tz) {
@@ -221,9 +221,13 @@ export function aggregatePeriods(hours, tz) {
   }
   const out = new Map();
   for (const [key, dayHours] of byDay) {
+    const nextDate = new Date(`${key}T00:00:00Z`);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const nextHours = byDay.get(nextDate.toISOString().slice(0, 10)) || [];
     const rows = [];
     for (const p of PERIODS) {
-      const inPeriod = dayHours.filter(h => {
+      const source = p.key === 'overnight' ? nextHours : dayHours;
+      const inPeriod = source.filter(h => {
         const hr = Number(tzParts(h.time, tz).hour);
         return hr >= p.from && hr < p.to;
       });

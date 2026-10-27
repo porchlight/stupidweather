@@ -25,7 +25,8 @@ ES module and the service worker needs an HTTP origin.
   wind and gusts.
 - **7-Day** — daily highs/lows and totals aggregated from the hourly
   points; each card expands into a morning/afternoon/evening/overnight
-  breakdown, and every view shows a layers icon for how many clothes to wear.
+  breakdown. Overnight appears last and covers midnight–6 AM the following
+  day, in local time. Every view shows a layers icon for how many clothes to wear.
 - **Radar** — an animated loop of the last hour of radar frames, plus EC's
   extrapolated nowcast out to about the next 50 minutes.
 - **Offline** — the last forecast is cached in `localStorage`; the shell is

@@ -17,7 +17,7 @@ assert.equal(times[times.length - 1], '2026-10-21T12:00:00.000Z');
 assert.ok(times.every(t => t.endsWith(':00:00.000Z')));
 
 const meteo = { hourly: {
-  time: [1793509200, 1793512800, 1793516400],
+  time: [1793530800, 1793534400, 1793538000],
   temperature_2m: [10, 8, null],
   precipitation_probability: [10, 80, null],
   precipitation: [0.2, 1.5, null],
@@ -328,27 +328,48 @@ assert.equal(layerIcon(0), '👕🧶🧥');
 assert.equal(layerIcon(-1), '👕🧶🧥🥶');
 assert.equal(layerIcon(null), '');
 
-// aggregatePeriods: 4 local-hour buckets (Toronto Oct = UTC-4), empty buckets omitted,
-// dates absent without hours; temps >10 keep feels null so deepEqual stays exact
+// aggregatePeriods: daytime buckets followed by the next local morning’s overnight.
 const periodHours = [
   { time: '2026-10-14T04:00:00Z', pop: 5, precip: 0, temp: 11, wind: 4, gust: null, cloud: null, tstorm: null },   // 00:00 local -> overnight
   { time: '2026-10-14T10:00:00Z', pop: 20, precip: 1, temp: 13, wind: 3, gust: 6, cloud: 10, tstorm: 0 },        // 06:00 local -> morning (edge)
   { time: '2026-10-14T16:00:00Z', pop: 60, precip: 2, temp: 22, wind: 5, gust: 11, cloud: 90, tstorm: 0 },       // 12:00 local -> afternoon (edge)
   { time: '2026-10-14T22:00:00Z', pop: 10, precip: 0.5, temp: 15, wind: 6, gust: 9, cloud: 40, tstorm: 0 },      // 18:00 local -> evening (edge)
+  { time: '2026-10-15T04:00:00Z', pop: 90, precip: 3, temp: 12, wind: 4, gust: 7, cloud: 90, tstorm: 0 },
+  { time: '2026-10-15T10:00:00Z', pop: 0, precip: 0, temp: 16, wind: 0, gust: 0, cloud: 0, tstorm: 0 },
   { time: '2026-10-15T16:00:00Z', pop: 30, precip: 4, temp: 14, wind: 8, gust: null, cloud: 45, tstorm: 40 }     // 12:00 local Oct 15 -> lone afternoon
 ];
 const periods = aggregatePeriods(periodHours, 'America/Toronto');
 assert.equal(periods.size, 2);
 assert.deepEqual(periods.get('2026-10-14').map(p => p.key),
-  ['overnight', 'morning', 'afternoon', 'evening']);
-assert.deepEqual(periods.get('2026-10-14')[1],
+  ['morning', 'afternoon', 'evening', 'overnight']);
+assert.deepEqual(periods.get('2026-10-14')[0],
   { key: 'morning', label: 'Morning', pop: 20, precip: 1, hi: 13, lo: 13, wind: 3, gust: 6, cond: 'Sunny', feels: null });
-assert.deepEqual(periods.get('2026-10-14')[3],
+assert.deepEqual(periods.get('2026-10-14')[2],
   { key: 'evening', label: 'Evening', pop: 10, precip: 0.5, hi: 15, lo: 15, wind: 6, gust: 9, cond: 'Partly cloudy', feels: null });
-assert.deepEqual(periods.get('2026-10-15'),
+assert.deepEqual(periods.get('2026-10-14')[3],
+  { key: 'overnight', label: 'Overnight', pop: 90, precip: 3, hi: 12, lo: 12, wind: 4, gust: 7, cond: 'Cloudy', feels: null });
+assert.deepEqual(periods.get('2026-10-15').filter(p => p.key !== 'morning'),
   [{ key: 'afternoon', label: 'Afternoon', pop: 30, precip: 4, hi: 14, lo: 14, wind: 8, gust: null, cond: 'Thunderstorm', feels: null }]);
 // no hours at all -> empty map
 assert.equal(aggregatePeriods([], 'America/Toronto').size, 0);
+
+for (const [day, nextMidnight, count] of [
+  ['2026-03-07', '2026-03-08T05:00:00Z', 5],
+  ['2026-10-31', '2026-11-01T04:00:00Z', 7],
+  ['2026-12-31', '2027-01-01T05:00:00Z', 6]
+]) {
+  const nightHours = Array.from({ length: count + 1 }, (_, i) => ({
+    time: new Date(Date.parse(nextMidnight) + i * 3600e3).toISOString(),
+    temp: i, precip: 1, pop: i * 10
+  }));
+  const dayHour = { time: `${day}T17:00:00Z`, temp: 20, precip: 10 };
+  const rows = aggregatePeriods([dayHour, ...nightHours], 'America/Toronto').get(day);
+  assert.equal(rows.at(-1).key, 'overnight');
+  assert.equal(rows.at(-1).precip, count);
+  assert.equal(rows.at(-1).hi, count - 1);
+  assert.equal(aggregateWeek([dayHour, ...nightHours], 'America/Toronto')[0].precip, 10);
+}
+assert.deepEqual(aggregatePeriods([periodHours[1]], 'America/Toronto').get('2026-10-14').map(p => p.key), ['morning']);
 
 const progressiveTimes = forecastTimes(new Date('2026-10-31T17:30:00Z'));
 const progressiveHours = progressiveTimes.map((time, i) => ({
@@ -368,7 +389,9 @@ for (const tz of ['America/Toronto', 'Asia/Kolkata', 'Pacific/Kiritimati', 'Amer
       assert.equal(g.hours !== null, ready);
       if (ready) {
         assert.deepEqual(aggregateWeek(g.hours, tz), expectedDays.filter(d => d.date === g.date));
-        assert.deepEqual(aggregatePeriods(g.hours, tz).get(g.date), expectedPeriods.get(g.date));
+        if (count === progressiveHours.length) {
+          assert.deepEqual(aggregatePeriods(loaded, tz).get(g.date), expectedPeriods.get(g.date));
+        }
       }
     }
   }

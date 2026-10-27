@@ -363,10 +363,10 @@ function renderWeekProgress(hours, times, loc) {
     section.innerHTML = skeletonCards(groups.length);
   }
   const cards = section.querySelector('.cards');
+  const periods = aggregatePeriods(hours, loc.tz);
   groups.forEach((g, i) => {
     if (!g.hours || !cards.children[i].classList.contains('skeleton')) return;
     const day = aggregateWeek(g.hours, loc.tz);
-    const periods = aggregatePeriods(g.hours, loc.tz);
     cards.children[i].outerHTML = weekCard(day[0], periods);
   });
 }
