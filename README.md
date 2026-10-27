@@ -23,28 +23,30 @@ ES module and the service worker needs an HTTP origin.
   timezone looked up so all times render in the location's local time.
 - **Hourly** — the next 12 hours: temperature, condition, POP, precipitation,
   wind and gusts.
-- **7-Day** — daily highs/lows and totals aggregated from the hourly/6-hourly
+- **7-Day** — daily highs/lows and totals aggregated from the hourly
   points; each card expands into a morning/afternoon/evening/overnight
   breakdown, and every view shows a layers icon for how many clothes to wear.
 - **Radar** — an animated loop of the last hour of radar frames, plus EC's
   extrapolated nowcast out to about the next 50 minutes.
 - **Offline** — the last forecast is cached in `localStorage`; the shell is
   cached by a service worker.
-- **Loading states** — skeleton cards while the forecast streams in, and a
+- **Loading states** — skeleton cards while the forecast loads, and a
   loading overlay on the radar map.
 
 ## Data sources
 
 | Data | Source |
 | --- | --- |
-| Forecast, wind, cloud, radar | [MSC GeoMet](https://eccc-msc.github.io/open-data/msc-geomet/readme_en/) WMS (`geo.weather.gc.ca`) |
-| Instant first paint (city locations) | MSC GeoMet-OGC-API `citypageweather-realtime` (`api.weather.gc.ca`) |
+| Forecast, wind, cloud, conditions | [Open-Meteo](https://open-meteo.com/en/docs) default-model forecast API (`api.open-meteo.com`) |
+| Radar | [MSC GeoMet](https://eccc-msc.github.io/open-data/msc-geomet/readme_en/) WMS (`geo.weather.gc.ca`) |
 | City search | [OpenStreetMap Nominatim](https://nominatim.org/) |
 | Timezone lookup | [timeapi.io](https://timeapi.io/) |
 | Basemap tiles | OpenStreetMap |
 
-Forecast values come from Environment Canada's GDPS model; radar frames come
-from the Canadian radar network, so radar coverage is Canada only.
+One Open-Meteo request returns 168 hourly points for both forecast views.
+Conditions use WMO weather codes rather than a separate thunderstorm probability.
+Daily totals include all available hours; the first and last local days can be partial.
+Radar frames come from the Canadian radar network, so radar coverage is Canada only.
 
 ## Project layout
 

@@ -48,7 +48,7 @@ export function forecastTimes(now = new Date()) {
   return out;
 }
 
-const SEVERITY = ['Sunny', 'Partly cloudy', 'Cloudy', 'Flurries', 'Thunderstorm', 'Blizzard'];
+const SEVERITY = ['Clear', 'Sunny', 'Partly cloudy', 'Cloudy', 'Fog', 'Drizzle', 'Rain', 'Freezing rain', 'Flurries', 'Thunderstorm', 'Blizzard'];
 
 // ponytail: fixed 7-19 local window; NOAA sunrise/sunset math if polar/edge latitudes matter
 export function isNight(iso, tz) {
@@ -76,6 +76,43 @@ export function conditionWord(cloud, tstorm, temp, precip, wind, night = false) 
   return word;
 }
 
+export function weatherCodeWord(code) {
+  if (code === 0 || code === 1) return 'Sunny';
+  if (code === 2) return 'Partly cloudy';
+  if (code === 3) return 'Cloudy';
+  if ([45, 48].includes(code)) return 'Fog';
+  if ([51, 53, 55].includes(code)) return 'Drizzle';
+  if ([56, 57, 66, 67].includes(code)) return 'Freezing rain';
+  if ([61, 63, 65, 80, 81, 82].includes(code)) return 'Rain';
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return 'Flurries';
+  if ([95, 96, 97, 99].includes(code)) return 'Thunderstorm';
+  return null;
+}
+
+export function openMeteoToForecast(data) {
+  const h = data?.hourly;
+  const fields = ['temperature_2m', 'precipitation_probability', 'precipitation',
+    'wind_speed_10m', 'wind_gusts_10m', 'cloud_cover', 'weather_code'];
+  if (!Array.isArray(h?.time) || !h.time.length
+      || !h.time.every(t => Number.isFinite(t) && Math.abs(t) < 8.64e12)
+      || !fields.every(f => Array.isArray(h[f]) && h[f].length === h.time.length
+        && h[f].every(v => v === null || Number.isFinite(v)))
+      || !h.temperature_2m.some(Number.isFinite)) {
+    throw new Error('Forecast data unavailable');
+  }
+  return h.time.map((t, i) => ({
+    time: new Date(t * 1000).toISOString(),
+    pop: h.precipitation_probability[i],
+    precip: h.precipitation[i],
+    temp: h.temperature_2m[i],
+    wind: h.wind_speed_10m[i],
+    gust: h.wind_gusts_10m[i],
+    cloud: h.cloud_cover[i],
+    tstorm: null,
+    cond: weatherCodeWord(h.weather_code[i])
+  }));
+}
+
 export function ecConditionWord(text) {
   const s = (text || '').toLowerCase();
   if (!s) return null;
@@ -93,6 +130,10 @@ const CONDITION_EMOJI = {
   'Clear': '🌙',
   'Partly cloudy': '⛅',
   'Cloudy': '☁️',
+  'Fog': '🌫️',
+  'Drizzle': '🌦️',
+  'Rain': '🌧️',
+  'Freezing rain': '🌧️',
   'Thunderstorm': '⛈️',
   'Flurries': '🌨️',
   'Blizzard': '❄️'
@@ -150,7 +191,7 @@ function addHour(stat, h) {
   }
   if (h.wind != null) stat.wind = stat.wind == null ? h.wind : Math.max(stat.wind, h.wind);
   if (h.gust != null) stat.gust = stat.gust == null ? h.gust : Math.max(stat.gust, h.gust);
-  const c = conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
+  const c = h.cond ?? conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind);
   if (c !== '–') stat.cond = worse(stat.cond, c);
 }
 

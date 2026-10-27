@@ -1,4 +1,4 @@
-const CACHE = 'stupid-weather-v24';
+const CACHE = 'stupid-weather-v25';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './logic.js', './manifest.webmanifest', './icon.svg'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));

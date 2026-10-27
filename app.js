@@ -1,4 +1,4 @@
-import { REFRESH_MS, forecastTimes, forecastDayProgress, pool, aggregateWeek, aggregatePeriods, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
+import { REFRESH_MS, openMeteoToForecast, forecastDayProgress, pool, aggregateWeek, aggregatePeriods, groupByDay, dayHeading, radarTimes, radarDelay, clockTime, weekLabel, conditionWord, conditionEmoji, isNight, windChill, layerIcon, fmtTemp, fmtKmh, fmtHiLo, skeletonCards, skeletonRows } from './logic.js';
 
 let activeTab = 'hourly';
 let paintLoadingView = null;
@@ -226,57 +226,19 @@ function restoreLocation() {
 }
 
 const WMS = 'https://geo.weather.gc.ca/geomet';
-const LAYER_POP = 'GDPS-WEonG_15km_Precip-Prob';
-const LAYER_PCP = 'GDPS_15km_Precip-Accum1h';
-const LAYER_TEMP = 'GDPS_15km_AirTemp_2m';
-const LAYER_WIND = 'GDPS_15km_WindSpeed_10m';
-const LAYER_GUST = 'GDPS_15km_WindGust_10m';
-const LAYER_CLOUD = 'GDPS_15km_TotalCloudCover';
-const LAYER_TSTORM = 'GDPS-WEonG_15km_Thunderstorm-Prob';
-const FORECAST_VER = '4';
-
-async function pointValue(layer, lat, lon, time) {
-  const d = 0.2;
-  const p = new URLSearchParams({
-    SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo',
-    LAYERS: layer, QUERY_LAYERS: layer, CRS: 'EPSG:4326',
-    BBOX: `${lat - d},${lon - d},${lat + d},${lon + d}`,
-    WIDTH: '101', HEIGHT: '101', I: '50', J: '50',
-    INFO_FORMAT: 'application/json', TIME: time.replace(/\.\d+Z$/, 'Z'), STYLES: ''
-  });
-  const res = await fetch(`${WMS}?${p}`);
-  if (!res.ok) throw new Error('WMS ' + res.status);
-  const json = await res.json();
-  const f = json.features && json.features[0];
-  return f && typeof f.properties.value === 'number' ? f.properties.value : null;
-}
-
-function loadedPrefix(hours) {
-  const hole = hours.findIndex(h => !h);
-  return hours.slice(0, hole === -1 ? hours.length : hole);
-}
+const FORECAST_VER = '5';
 
 export async function fetchForecast(loc, onProgress) {
-  const times = forecastTimes(new Date());
-  const hours = new Array(times.length);
-  let anyData = false;
-  if (onProgress) onProgress([], times);
-  await pool(times, 4, async (time, i) => {
-    const [pop, precip, temp, wind, gust, cloud, tstorm] = await Promise.all([
-      pointValue(LAYER_POP, loc.lat, loc.lon, time),
-      pointValue(LAYER_PCP, loc.lat, loc.lon, time),
-      pointValue(LAYER_TEMP, loc.lat, loc.lon, time),
-      pointValue(LAYER_WIND, loc.lat, loc.lon, time),
-      pointValue(LAYER_GUST, loc.lat, loc.lon, time),
-      pointValue(LAYER_CLOUD, loc.lat, loc.lon, time),
-      pointValue(LAYER_TSTORM, loc.lat, loc.lon, time)
-    ].map(p => p.catch(() => null)));
-    if (pop != null || precip != null || temp != null || wind != null
-        || gust != null || cloud != null || tstorm != null) anyData = true;
-    hours[i] = { time, pop: pop ?? 0, precip: precip ?? 0, temp, wind, gust, cloud, tstorm };
-    if (onProgress) onProgress(loadedPrefix(hours), times);
+  const p = new URLSearchParams({
+    latitude: loc.lat, longitude: loc.lon,
+    hourly: 'temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_gusts_10m,cloud_cover,weather_code',
+    forecast_hours: '168', timezone: 'GMT', timeformat: 'unixtime',
+    temperature_unit: 'celsius', wind_speed_unit: 'ms', precipitation_unit: 'mm'
   });
-  if (!anyData) throw new Error('Forecast data unavailable');
+  const res = await fetch(`https://api.open-meteo.com/v1/forecast?${p}`);
+  if (!res.ok) throw new Error('Open-Meteo ' + res.status);
+  const hours = openMeteoToForecast(await res.json());
+  if (onProgress) onProgress(hours, hours.map(h => h.time));
   writeForecast(hours, loc);
   return hours;
 }
@@ -315,7 +277,8 @@ function hourlyList(hours, loc) {
     const head = `<h3 class="hour-head">${dayHeading(g.date, now, loc.tz)}</h3>`;
     const rows = g.hours.map(h => {
       const night = isNight(h.time, loc.tz);
-      const cond = h.cond ?? conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind, night);
+      const base = h.cond ?? conditionWord(h.cloud, h.tstorm, h.temp, h.precip, h.wind, night);
+      const cond = base === 'Sunny' && night ? 'Clear' : base;
       const feels = windChill(h.temp, h.wind);
       const feelsHtml = feels != null && Math.round(feels) !== Math.round(h.temp)
         ? `<span class="hour-feels">Feels like: ${fmtTemp(feels)}</span>` : '';

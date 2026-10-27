@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { tzParts, dateKey, forecastTimes, forecastDayProgress, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, layerIcon, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast, aggregatePeriods } from './logic.js';
+import { openMeteoToForecast, weatherCodeWord, tzParts, dateKey, forecastTimes, forecastDayProgress, aggregateWeek, groupByDay, dayHeading, pool, radarTimes, radarDelay, clockTime, dayLabel, weekLabel, conditionWord, conditionEmoji, isNight, windChill, fmtTemp, fmtKmh, fmtHiLo, layerIcon, skeletonCards, skeletonRows, ecConditionWord, citypageToForecast, aggregatePeriods } from './logic.js';
 
 // tzParts converts UTC to the location tz (Toronto in Oct = UTC-4)
 assert.deepEqual(tzParts('2026-10-15T02:00:00Z', 'America/Toronto'),
@@ -15,6 +15,47 @@ assert.equal(times[11], '2026-10-15T04:00:00.000Z');
 assert.equal(times[12], '2026-10-15T06:00:00.000Z');
 assert.equal(times[times.length - 1], '2026-10-21T12:00:00.000Z');
 assert.ok(times.every(t => t.endsWith(':00:00.000Z')));
+
+const meteo = { hourly: {
+  time: [1793509200, 1793512800, 1793516400],
+  temperature_2m: [10, 8, null],
+  precipitation_probability: [10, 80, null],
+  precipitation: [0.2, 1.5, null],
+  wind_speed_10m: [5, 7, null],
+  wind_gusts_10m: [8, 12, null],
+  cloud_cover: [0, 90, null],
+  weather_code: [0, 95, null]
+} };
+const meteoHours = openMeteoToForecast(meteo);
+assert.equal(meteoHours[0].time, new Date(meteo.hourly.time[0] * 1000).toISOString());
+assert.equal(meteoHours[0].wind, 5);
+assert.equal(fmtKmh(meteoHours[0].wind), '18');
+assert.equal(meteoHours[0].cond, 'Sunny');
+assert.equal(meteoHours[1].cond, 'Thunderstorm');
+assert.equal(meteoHours[1].tstorm, null);
+assert.equal(meteoHours[2].pop, null);
+assert.equal(meteoHours[2].temp, null);
+assert.equal(meteoHours[2].cond, null);
+const meteoDay = aggregateWeek(meteoHours, 'America/Toronto')[0];
+assert.equal(meteoDay.precip, 1.7);
+assert.equal(meteoDay.pop, 80);
+assert.equal(meteoDay.cond, 'Thunderstorm');
+assert.equal(aggregatePeriods(meteoHours, 'America/Toronto').get(meteoDay.date)[0].cond, 'Thunderstorm');
+for (const [codes, word] of [
+  [[0, 1], 'Sunny'], [[2], 'Partly cloudy'], [[3], 'Cloudy'],
+  [[45, 48], 'Fog'], [[51, 53, 55], 'Drizzle'],
+  [[56, 57, 66, 67], 'Freezing rain'], [[61, 63, 65, 80, 81, 82], 'Rain'],
+  [[71, 73, 75, 77, 85, 86], 'Flurries'], [[95, 96, 97, 99], 'Thunderstorm']
+]) {
+  for (const code of codes) assert.equal(weatherCodeWord(code), word);
+  assert.ok(conditionEmoji(word));
+}
+assert.equal(weatherCodeWord(999), null);
+for (const invalid of [null, {}, { hourly: {} },
+  { hourly: { ...meteo.hourly, wind_speed_10m: [] } },
+  { hourly: { ...meteo.hourly, temperature_2m: [null, null, null] } },
+  { hourly: { ...meteo.hourly, time: [NaN, 1, 2] } }
+]) assert.throws(() => openMeteoToForecast(invalid), /Forecast data unavailable/);
 
 // sample hours for the week aggregation (Toronto, EDT = UTC-4 in October)
 const hours = [
